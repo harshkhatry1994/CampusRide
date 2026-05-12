@@ -1,0 +1,14 @@
+{
+  "name": "campus-ride-root",
+  "version": "1.0.0",
+  "description": "Premium Bike Rental Platform - MERN Stack",
+  "scripts": {
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev-backend": "cd backend && npm run dev",
+    "dev-frontend": "cd frontend && npm run dev",
+    "dev": "npm-run-all --parallel dev-backend dev-frontend"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5"
+  }
+}
