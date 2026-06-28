@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
   <img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" />
-  <img src="https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white" />
+  <img src="https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" />
   <img src="https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white" />
 </p>
@@ -43,7 +43,7 @@
 ### **Backend**
 - **Runtime**: Node.js
 - **Framework**: Express.js
-- **Database**: MongoDB Atlas
+- **Database**: Supabase (PostgreSQL)
 - **Auth**: Passport.js, JWT, Google OAuth 2.0
 - **Storage**: Local/Cloudinary for document uploads
 
@@ -53,7 +53,7 @@
 
 ```bash
 CampusRide/
-├── backend/                # Express API & MongoDB Models
+├── backend/                # Express API for static uploads & legacy health endpoints
 │   ├── src/
 │   │   ├── controllers/    # Business Logic
 │   │   ├── models/         # DB Schemas
@@ -86,7 +86,7 @@ CampusRide/
 
 ### **Prerequisites**
 - Node.js (v16+)
-- MongoDB Atlas Account
+- Supabase Account
 - Google Cloud Console Project (for Auth)
 
 ### **1. Clone the Repository**
@@ -103,7 +103,8 @@ npm install
 Create a `.env` file in the `backend` folder:
 ```env
 PORT=5000
-MONGODB_URI=your_mongodb_atlas_uri
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
 JWT_SECRET=your_jwt_secret
 FRONTEND_URL=http://localhost:5173
 GOOGLE_CLIENT_ID=your_google_id

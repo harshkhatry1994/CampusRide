@@ -1,5 +1,4 @@
-// ─── Siri AI Engine v2 — Real Data + Memory ──────────────────────
-// Fetches live bike data from the CampusRide backend API.
+import { supabase } from '@/lib/supabase';
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -71,14 +70,36 @@ const CACHE_TTL = 60_000; // 1 min
 export async function fetchBikes(): Promise<ApiBike[]> {
   if (bikeCache.length && Date.now() - lastFetch < CACHE_TTL) return bikeCache;
   try {
-    const res = await fetch(`${API}/api/bikes?limit=100`);
-    const json = await res.json();
-    if (json.success) {
-      bikeCache = json.data.bikes || [];
+    const { data, error } = await supabase
+      .from('bikes')
+      .select('*');
+    if (!error && data) {
+      bikeCache = data.map((b: any) => ({
+        _id: b.id,
+        name: b.bike_name || b.brand,
+        brand: b.brand,
+        model: b.model,
+        category: b.category || 'Street',
+        pricePerHour: Number(b.hourly_rate || 50),
+        pricePerDay: Number(b.daily_rate || 500),
+        mileage: Number(b.mileage || 40),
+        fuelType: b.fuel_type || 'Petrol',
+        rating: 4.5,
+        available: b.status === 'available',
+        imageUrl: b.image_url || '',
+        description: b.description || '',
+        engineCC: Number(b.engine_cc || 150),
+        color: b.color || 'Black',
+        helmetIncluded: b.helmet_included !== false,
+        securityDeposit: Number(b.security_deposit || 1000),
+        pickupLocation: b.pickup_location || 'Campus Gate 1',
+        topSpeed: 100,
+        features: ['Disk Brake', 'LED headlight']
+      }));
       lastFetch = Date.now();
     }
-  } catch {
-    /* keep stale cache */
+  } catch (err) {
+    console.error("Error fetching bikes for SiriEngine", err);
   }
   return bikeCache;
 }

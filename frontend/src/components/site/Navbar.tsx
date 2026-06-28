@@ -1,9 +1,18 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Bike, Sparkles, User as UserIcon, LogOut, Crown } from "lucide-react";
+import { Bike, Sparkles, User as UserIcon, LogOut, Crown, LayoutDashboard, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { BackButton } from "./BackButton";
 import { useAuth } from "@/context/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const links = [
   { to: "/", label: "Home" },
@@ -14,7 +23,7 @@ const links = [
 export function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, isAdmin } = useAuth();
   const isLoggedIn = !!token;
 
   const handleLogout = () => {
@@ -52,40 +61,8 @@ export function Navbar() {
 
           {isLoggedIn ? (
             <div className="flex items-center gap-2">
-              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/5 border border-primary/10 mr-2">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  {user?.name} ({user?.role})
-                </span>
-              </div>
-
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="hidden sm:inline-flex shadow-sm"
-              >
-                <Link
-                  to={user?.role === "admin" ? "/admin" : "/dashboard"}
-                  className="flex items-center gap-2"
-                >
-                  <UserIcon className="h-3.5 w-3.5" />
-                  {user?.role === "admin" ? "Admin Panel" : "Dashboard"}
-                </Link>
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <LogOut className="h-3.5 w-3.5 mr-1.5" />
-                Sign out
-              </Button>
-
-              {user?.role === "admin" ? (
-                <div className="relative overflow-hidden group border border-amber-500/30 bg-amber-500/10 text-amber-500 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+              {isAdmin ? (
+                <div className="hidden lg:flex relative overflow-hidden group border border-amber-500/30 bg-amber-500/10 text-amber-500 px-3 py-1.5 rounded-full items-center gap-1.5 mr-2">
                   <Crown className="h-4 w-4 animate-pulse text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
                   <span className="font-black tracking-[0.2em] uppercase text-[10px] drop-shadow-md">
                     Boss
@@ -96,7 +73,11 @@ export function Navbar() {
                   asChild
                   variant="ghost"
                   size="sm"
-                  className="relative overflow-hidden group border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all duration-300"
+                  className={`hidden sm:flex relative overflow-hidden group border transition-all duration-300 mr-2 ${
+                    user?.is_premium
+                      ? "border-amber-400/80 bg-amber-500/20 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                  }`}
                 >
                   <Link to="/premium" className="flex items-center gap-1.5">
                     <Sparkles className="h-4 w-4 animate-pulse text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
@@ -107,6 +88,44 @@ export function Navbar() {
                   </Link>
                 </Button>
               )}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                    <Avatar className="h-10 w-10 border border-border shadow-sm transition-transform hover:scale-105">
+                      <AvatarImage src={user?.avatar_url || ""} alt={user?.name || "User"} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                        {user?.name?.charAt(0).toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 mt-2 rounded-[1rem] border-border shadow-xl p-2 bg-card/95 backdrop-blur-md" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal px-2 py-1.5">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-black leading-none text-foreground">{user?.name}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-border/50 my-2" />
+                  <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary cursor-pointer px-3 py-2.5 transition-colors">
+                    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center w-full">
+                      <LayoutDashboard className="mr-2 h-4 w-4" />
+                      <span>{isAdmin ? "Admin Panel" : "My Dashboard"}</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="rounded-xl focus:bg-muted cursor-pointer px-3 py-2.5 transition-colors">
+                    <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Account Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-border/50 my-2" />
+                  <DropdownMenuItem onClick={handleLogout} className="rounded-xl focus:bg-destructive/10 focus:text-destructive text-destructive cursor-pointer px-3 py-2.5 transition-colors">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
             </div>
           ) : (
             <>

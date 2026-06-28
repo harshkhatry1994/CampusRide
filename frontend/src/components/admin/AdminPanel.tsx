@@ -64,6 +64,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { AdminSettings } from "./AdminSettings";
+import { AdminMemberships } from "./AdminMemberships";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -135,6 +137,12 @@ export function AdminPanel() {
           >
             <MessageCircle className="h-4 w-4" /> AI Chatbot
           </TabsTrigger>
+          <TabsTrigger
+            value="settings"
+            className="gap-2 px-6 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow transition-all"
+          >
+            <Settings className="h-4 w-4" /> Settings
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="stats" className="mt-0">
@@ -162,10 +170,14 @@ export function AdminPanel() {
         </TabsContent>
 
         <TabsContent value="memberships" className="mt-0">
-          <MembershipsManagement token={token} />
+          <AdminMemberships />
         </TabsContent>
         <TabsContent value="chatbot" className="mt-0">
           <ChatbotSettings />
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-0">
+          <AdminSettings />
         </TabsContent>
       </Tabs>
     </div>
@@ -1582,6 +1594,3 @@ function MembershipsManagement({ token }: { token: string | null }) {
   );
 }
 
-function ChatbotSettings() {
-  return <div className="p-10 text-center text-muted-foreground">Chatbot configurations...</div>;
-}

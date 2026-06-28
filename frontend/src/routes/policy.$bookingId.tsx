@@ -30,8 +30,7 @@ function PolicyAgreementPage() {
       toast.error("Please accept the policies before continuing to payment.");
       return;
     }
-    // Proceed to Payment
-    navigate({ to: "/payment/$bookingId", params: { bookingId } });
+    navigate({ to: "/payment/$bookingId", params: { bookingId }, replace: true });
   };
 
   return (

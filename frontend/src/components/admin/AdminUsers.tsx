@@ -38,8 +38,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { supabase } from "@/lib/supabase";
 
 export function AdminUsers() {
   const { token } = useAuth();
@@ -55,19 +54,20 @@ export function AdminUsers() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const params = search.trim() ? `?search=${encodeURIComponent(search)}` : "";
-      const res = await fetch(`${API_URL}/api/admin/users${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) setUsers(data.data);
-      else toast.error(data.message || "Failed to load users");
-    } catch {
+      let query = supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (search.trim()) {
+        query = query.or(`email.ilike.%${search}%,role.ilike.%${search}%`);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (err: any) {
+      console.error("fetchUsers error:", err);
       toast.error("Connection error");
     } finally {
       setLoading(false);
     }
-  }, [token, search]);
+  }, [search]);
 
   useEffect(() => {
     fetchUsers();
@@ -77,14 +77,14 @@ export function AdminUsers() {
     setSelectedUser(user);
     setLoadingBookings(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/bookings`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setUserBookings(data.data.filter((b: any) => (b.user?._id || b.user) === user._id));
-      }
-    } catch (err) {
+      const { data, error } = await supabase
+        .from('rentals')
+        .select('*, bikes(bike_name, brand, model)')
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      setUserBookings(data || []);
+    } catch (err: any) {
       console.error("Failed to load user bookings", err);
     } finally {
       setLoadingBookings(false);
@@ -94,24 +94,21 @@ export function AdminUsers() {
   const toggleStatus = async (id: string, currentStatus: boolean) => {
     setActionLoading(id);
     try {
-      const res = await fetch(`${API_URL}/api/admin/users/${id}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ isActive: !currentStatus }),
-      });
-      const data = await res.json();
-      if (data.success) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: currentStatus ? 'suspended' : 'Student' })
+        .eq('id', id);
+        
+      if (!error) {
         toast.success(`Rider ${!currentStatus ? "activated" : "suspended"}`);
         fetchUsers();
-        if (selectedUser?._id === id)
-          setSelectedUser({ ...selectedUser, isActive: !currentStatus });
+        if (selectedUser?.id === id)
+          setSelectedUser({ ...selectedUser, role: currentStatus ? 'suspended' : 'Student' });
       } else {
-        toast.error(data.message || "Action failed");
+        toast.error(error.message || "Action failed");
       }
-    } catch {
+    } catch (err: any) {
+      console.error("toggleStatus error:", err);
       toast.error("Connection error");
     } finally {
       setActionLoading(null);
@@ -122,19 +119,16 @@ export function AdminUsers() {
     if (!confirm("Are you sure you want to permanently delete this user? This action cannot be undone.")) return;
     setActionLoading(id);
     try {
-      const res = await fetch(`${API_URL}/api/admin/users/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (!error) {
         toast.success("User removed from system");
         fetchUsers();
-        if (selectedUser?._id === id) setSelectedUser(null);
+        if (selectedUser?.id === id) setSelectedUser(null);
       } else {
-        toast.error(data.message || "Failed to delete user");
+        toast.error(error.message || "Failed to delete user");
       }
-    } catch {
+    } catch (err: any) {
+      console.error("handleDelete error:", err);
       toast.error("Connection error");
     } finally {
       setActionLoading(null);
@@ -226,55 +220,49 @@ export function AdminUsers() {
               ) : (
                 users.map((u) => (
                   <TableRow 
-                    key={u._id} 
+                    key={u.id} 
                     className="border-b border-border/40 hover:bg-muted/10 transition-colors group cursor-pointer"
                     onClick={() => openProfile(u)}
                   >
                     <TableCell className="px-6 py-5">
                       <div className="flex items-center gap-4">
                         <div className="h-10 w-10 rounded-xl bg-muted border border-border flex items-center justify-center overflow-hidden shadow-inner">
-                          {u.avatar ? (
-                            <img src={u.avatar} className="w-full h-full object-cover" alt="" />
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url} className="w-full h-full object-cover" alt="" />
                           ) : (
                             <User className="h-5 w-5 text-muted-foreground" />
                           )}
                         </div>
                         <div>
-                          <p className="font-black text-sm text-foreground group-hover:text-primary transition-colors">{u.name}</p>
+                          <p className="font-black text-sm text-foreground group-hover:text-primary transition-colors">{u.name || u.full_name || u.email?.split('@')[0] || 'User'}</p>
                           <p className="text-[10px] font-bold text-muted-foreground">{u.email}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="px-6 py-5">
-                      {u.googleId ? (
-                        <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 rounded-lg font-black text-[9px] uppercase tracking-widest gap-1.5 px-2">
-                          <LogIn className="h-3 w-3" /> Google Verified
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-blue-600 dark:text-blue-400 border-blue-500/20 bg-blue-500/10 rounded-lg font-black text-[9px] uppercase tracking-widest px-2">
-                          Email Secured
-                        </Badge>
-                      )}
+                      <Badge variant="outline" className="text-blue-600 dark:text-blue-400 border-blue-500/20 bg-blue-500/10 rounded-lg font-black text-[9px] uppercase tracking-widest px-2">
+                        Email Secured
+                      </Badge>
                     </TableCell>
                     <TableCell className="px-6 py-5">
                       <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
                         <Calendar className="h-3 w-3 text-primary" />
-                        {new Date(u.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                        {new Date(u.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                       </div>
                     </TableCell>
                     <TableCell className="px-6 py-5">
                       <Badge className={cn(
                         "rounded-lg font-black text-[9px] uppercase tracking-widest px-2",
-                        u.role === "admin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        u.role === "Admin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                       )}>
                         {u.role}
                       </Badge>
                     </TableCell>
                     <TableCell className="px-6 py-5">
                       <div className="flex items-center gap-2">
-                        <div className={cn("h-2 w-2 rounded-full", u.isActive ? "bg-emerald-500" : "bg-rose-500")} />
+                        <div className={cn("h-2 w-2 rounded-full", u.role !== 'suspended' ? "bg-emerald-500" : "bg-rose-500")} />
                         <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                          {u.isActive ? "Active" : "Suspended"}
+                          {u.role !== 'suspended' ? "Active" : "Suspended"}
                         </span>
                       </div>
                     </TableCell>
@@ -293,19 +281,19 @@ export function AdminUsers() {
                           size="icon"
                           className={cn(
                             "h-10 w-10 rounded-xl transition-all shadow-sm border",
-                            u.isActive 
+                            u.role !== 'suspended' 
                               ? "text-destructive bg-destructive/5 border-destructive/10 hover:bg-destructive hover:text-destructive-foreground" 
                               : "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/5 border-emerald-100 dark:border-emerald-500/10 hover:bg-emerald-600 hover:text-white"
                           )}
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleStatus(u._id, u.isActive);
+                            toggleStatus(u.id, u.role !== 'suspended');
                           }}
-                          disabled={actionLoading === u._id}
+                          disabled={actionLoading === u.id}
                         >
-                          {actionLoading === u._id ? (
+                          {actionLoading === u.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : u.isActive ? (
+                          ) : u.role !== 'suspended' ? (
                             <ShieldAlert className="h-4 w-4" />
                           ) : (
                             <ShieldCheck className="h-4 w-4" />
@@ -314,10 +302,10 @@ export function AdminUsers() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          disabled={actionLoading === u._id}
+                          disabled={actionLoading === u.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDelete(u._id);
+                            handleDelete(u.id);
                           }}
                           className="h-10 w-10 rounded-xl hover:bg-destructive hover:text-destructive-foreground text-destructive bg-destructive/5 border border-destructive/10 transition-all shadow-sm"
                         >
@@ -343,8 +331,8 @@ export function AdminUsers() {
                 <div className="absolute -bottom-12 left-10">
                   <div className="h-28 w-28 rounded-[2rem] bg-card p-2 shadow-2xl">
                     <div className="h-full w-full rounded-[1.5rem] bg-muted flex items-center justify-center overflow-hidden border border-border shadow-inner">
-                      {selectedUser.avatar ? (
-                        <img src={selectedUser.avatar} className="w-full h-full object-cover" />
+                      {selectedUser.avatar_url ? (
+                        <img src={selectedUser.avatar_url} className="w-full h-full object-cover" />
                       ) : (
                         <User className="h-12 w-12 text-muted-foreground/30" />
                       )}
@@ -354,15 +342,11 @@ export function AdminUsers() {
                 <div className="absolute top-8 right-10 flex gap-3">
                   <Badge className={cn(
                     "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border",
-                    selectedUser.isActive ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-destructive/10 text-destructive border-destructive/20"
+                    selectedUser.role !== 'suspended' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-destructive/10 text-destructive border-destructive/20"
                   )}>
-                    {selectedUser.isActive ? "Network Active" : "Access Denied"}
+                    {selectedUser.role !== 'suspended' ? "Network Active" : "Access Denied"}
                   </Badge>
-                  {selectedUser.googleId && (
-                    <Badge className="bg-primary/10 text-primary border-primary/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                      Google SSO Verified
-                    </Badge>
-                  )}
+                  {/* Badge removed */}
                 </div>
               </div>
 
@@ -370,8 +354,8 @@ export function AdminUsers() {
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
                   <div className="space-y-1">
                     <h3 className="text-4xl font-black text-foreground tracking-tight flex items-center gap-4">
-                      {selectedUser.name}
-                      {selectedUser.role === "admin" && <Shield className="h-6 w-6 text-primary" />}
+                      {selectedUser.name || selectedUser.full_name || selectedUser.email?.split('@')[0] || 'User'}
+                      {(selectedUser.role === "admin" || selectedUser.role === "super_admin") && <Shield className="h-6 w-6 text-primary" />}
                     </h3>
                     <div className="flex flex-wrap gap-x-8 gap-y-3 mt-4">
                       <p className="text-muted-foreground font-bold text-sm flex items-center gap-2.5">
@@ -383,29 +367,29 @@ export function AdminUsers() {
                         </p>
                       )}
                       <p className="text-muted-foreground font-bold text-sm flex items-center gap-2.5">
-                        <Calendar className="h-4 w-4 text-primary" /> Member since {new Date(selectedUser.createdAt).toLocaleDateString()}
+                        <Calendar className="h-4 w-4 text-primary" /> Member since {new Date(selectedUser.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-3">
                     <Button
-                      onClick={() => toggleStatus(selectedUser._id, selectedUser.isActive)}
-                      disabled={actionLoading === selectedUser._id}
+                      onClick={() => toggleStatus(selectedUser.id, selectedUser.role !== 'suspended')}
+                      disabled={actionLoading === selectedUser.id}
                       className={cn(
                         "h-14 px-8 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl",
-                        selectedUser.isActive 
+                        selectedUser.role !== 'suspended' 
                           ? "bg-muted text-destructive hover:bg-muted/80 border border-border" 
                           : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
                       )}
                     >
-                      {actionLoading === selectedUser._id ? (
+                      {actionLoading === selectedUser.id ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : selectedUser.isActive ? (
+                      ) : selectedUser.role !== 'suspended' ? (
                         <UserX className="h-4 w-4 mr-2" />
                       ) : (
                         <UserCheck className="h-4 w-4 mr-2" />
                       )}
-                      {selectedUser.isActive ? "Suspend Access" : "Grant Access"}
+                      {selectedUser.role !== 'suspended' ? "Suspend Access" : "Grant Access"}
                     </Button>
                   </div>
                 </div>
@@ -426,19 +410,19 @@ export function AdminUsers() {
                   ) : (
                     <div className="grid gap-6 sm:grid-cols-2">
                       {userBookings.map((b) => (
-                        <div key={b._id} className="p-8 rounded-[2.5rem] bg-card border border-border shadow-sm group hover:border-primary/30 transition-all">
+                        <div key={b.id} className="p-8 rounded-[2.5rem] bg-card border border-border shadow-sm group hover:border-primary/30 transition-all">
                           <div className="flex justify-between items-start mb-6">
-                            <span className="font-mono text-xs font-black text-primary">#{b.bookingId}</span>
+                            <span className="font-mono text-xs font-black text-primary">#{b.id?.substring(0,8)}</span>
                             <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-border bg-muted text-muted-foreground">
                               {b.status}
                             </Badge>
                           </div>
-                          <p className="text-lg font-black text-foreground">{b.bike?.brand} {b.bike?.model}</p>
+                          <p className="text-lg font-black text-foreground">{b.bikes?.brand} {b.bikes?.model}</p>
                           <p className="text-[11px] font-bold text-muted-foreground uppercase mt-2">
-                            {new Date(b.startDate).toLocaleDateString()} — {new Date(b.endDate).toLocaleDateString()}
+                            {new Date(b.start_date).toLocaleDateString()} — {new Date(b.end_date).toLocaleDateString()}
                           </p>
                           <div className="mt-6 flex items-center justify-between pt-6 border-t border-border">
-                            <span className="text-base font-black text-primary">₹{b.pricing?.totalAmount?.toLocaleString()}</span>
+                            <span className="text-base font-black text-primary">₹{b.total_price?.toLocaleString()}</span>
                             <Button variant="ghost" size="sm" className="h-9 rounded-xl text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all">
                               View Details <ExternalLink className="h-3 w-3 ml-2" />
                             </Button>

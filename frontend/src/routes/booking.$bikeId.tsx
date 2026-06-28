@@ -23,6 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { toISTISOString } from "@/lib/dateUtils";
 
 export const Route = createFileRoute("/booking/$bikeId")({
   head: () => ({ meta: [{ title: "Book Your Ride — CampusRide" }] }),
@@ -39,9 +41,9 @@ function BookingDetailsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [bookingData, setBookingData] = useState({
-    startDate: new Date().toISOString().split("T")[0],
+    startDate: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }), // YYYY-MM-DD in IST
     startTime: "10:00",
-    endDate: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+    endDate: new Date(Date.now() + 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }),
     endTime: "10:00",
     riderName: user?.name || "",
     riderEmail: user?.email || "",
@@ -68,13 +70,14 @@ function BookingDetailsPage() {
       return;
     }
 
-    fetch(`${import.meta.env.VITE_API_URL}/api/bikes/${bikeId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) setBike(data.data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    async function loadBike() {
+      const { data, error } = await supabase.from("bikes").select("*").eq("id", bikeId).single();
+      if (!error && data) {
+        setBike(data);
+      }
+      setLoading(false);
+    }
+    loadBike();
   }, [bikeId, token, navigate]);
 
   const handleFileChange = (key: string, file: File | null) => {
@@ -89,13 +92,14 @@ function BookingDetailsPage() {
   };
 
   // Price calculation
+  // Parse in local time directly — no timezone conversion needed for price calculation
   const start = new Date(`${bookingData.startDate}T${bookingData.startTime}`);
   const end = new Date(`${bookingData.endDate}T${bookingData.endTime}`);
   const hours = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60)));
   const days = Math.ceil(hours / 24);
 
-  const basePrice = days * (bike?.pricePerDay || 0);
-  const deposit = bike?.securityDeposit || 1000;
+  const basePrice = days * (bike?.daily_rate || 0);
+  const deposit = bike?.security_deposit || 1000;
   const platformFee = 49;
   const gst = Math.round(basePrice * 0.18);
   const totalAmount = basePrice + deposit + platformFee + gst;
@@ -111,57 +115,84 @@ function BookingDetailsPage() {
     }
 
     setSubmitting(true);
-    const formData = new FormData();
-    formData.append("bikeId", bikeId);
-    formData.append("startDate", bookingData.startDate);
-    formData.append("startTime", bookingData.startTime);
-    formData.append("endDate", bookingData.endDate);
-    formData.append("returnTime", bookingData.endTime);
-
-    formData.append(
-      "riderDetails",
-      JSON.stringify({
-        name: bookingData.riderName,
-        email: bookingData.riderEmail,
-        phone: bookingData.riderPhone,
-        emergencyContact: bookingData.emergencyContact,
-        address: bookingData.address,
-      }),
-    );
-
-    formData.append(
-      "pricing",
-      JSON.stringify({
-        basePrice,
-        securityDeposit: deposit,
-        gst,
-        platformFee,
-        totalAmount,
-      }),
-    );
-
-    if (files.licence) formData.append("drivingLicense", files.licence);
-    if (files.aadhaar) formData.append("idProof", files.aadhaar);
-    if (files.selfie) formData.append("selfieImage", files.selfie);
-
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      const timestamp = Date.now();
+      
+      // Upload files to Supabase Storage
+      const uploadPromises = [];
+      let drivingLicenseUrl = null;
+      let idProofUrl = null;
+      let selfieUrl = null;
 
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Booking & Documents Saved!");
-        navigate({ to: "/policy/$bookingId", params: { bookingId: data.data._id } });
-      } else {
-        toast.error(data.message);
+      if (files.licence) {
+        uploadPromises.push(
+          supabase.storage.from('driver-licenses').upload(`${user?.id}/dl_${timestamp}.jpg`, files.licence)
+            .then(res => {
+              console.log("driver-licenses upload result:", res);
+              if (!res.error && res.data) {
+                const { data } = supabase.storage.from('driver-licenses').getPublicUrl(res.data.path);
+                drivingLicenseUrl = data.publicUrl;
+              }
+            })
+        );
       }
-    } catch (err) {
-      toast.error("Failed to save booking");
+      if (files.aadhaar) {
+        uploadPromises.push(
+          supabase.storage.from('student-ids').upload(`${user?.id}/aadhaar_${timestamp}.jpg`, files.aadhaar)
+            .then(res => {
+              console.log("student-ids upload result:", res);
+              if (!res.error && res.data) {
+                const { data } = supabase.storage.from('student-ids').getPublicUrl(res.data.path);
+                idProofUrl = data.publicUrl;
+              }
+            })
+        );
+      }
+      if (files.selfie) {
+        uploadPromises.push(
+          supabase.storage.from('profile-photos').upload(`${user?.id}/selfie_${timestamp}.jpg`, files.selfie)
+            .then(res => {
+              console.log("profile-photos upload result:", res);
+              if (!res.error && res.data) {
+                const { data } = supabase.storage.from('profile-photos').getPublicUrl(res.data.path);
+                selfieUrl = data.publicUrl;
+              }
+            })
+        );
+      }
+
+      await Promise.all(uploadPromises);
+
+      // We attempt to insert all fields. If the table is missing columns, Postgres will ignore or error.
+      // To be safe, we insert the base schema fields.
+      const { data, error } = await supabase.from('rentals').insert({
+        bike_id: bikeId,
+        user_id: user?.id,
+        status: 'pending',
+        start_date: toISTISOString(bookingData.startDate, bookingData.startTime),
+        end_date: toISTISOString(bookingData.endDate, bookingData.endTime),
+        total_price: totalAmount,
+        driving_license_url: drivingLicenseUrl,
+        id_proof_url: idProofUrl,
+        selfie_url: selfieUrl,
+        address: bookingData.address,
+        phone: bookingData.riderPhone
+      }).select().single();
+
+      if (error) throw error;
+
+      toast.success("Booking & Documents Saved!");
+      navigate({ to: "/policy/$bookingId", params: { bookingId: data.id }, replace: true });
+    } catch (err: any) {
+      console.error("Rental insert error:", err);
+      console.error("Full rental insert error object:", {
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint,
+        code: err?.code,
+        error: err
+      });
+      toast.error("Booking creation failed. Please try again.");
     } finally {
       setSubmitting(false);
     }

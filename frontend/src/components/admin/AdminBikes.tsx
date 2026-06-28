@@ -50,19 +50,17 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
-const API_URL = import.meta.env.VITE_API_URL;
 const CATEGORIES = ["Cruiser", "Sports", "Street", "Adventure", "Scooter"];
 const FUEL_TYPES = ["Petrol", "Electric", "Hybrid"];
 
 function getImageSrc(imageUrl: string | undefined) {
   if (!imageUrl) return null;
-  if (imageUrl.startsWith("http")) return imageUrl;
-  if (imageUrl.startsWith("/uploads")) return `${API_URL}${imageUrl}`;
   return imageUrl;
 }
 
-export function AdminBikes() {
+export function AdminBikes({ readOnly = false }: { readOnly?: boolean }) {
   const { token } = useAuth();
   const [bikes, setBikes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,9 +73,9 @@ export function AdminBikes() {
   const fetchBikes = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/bikes?limit=100`);
-      const data = await res.json();
-      if (data.success) setBikes(data.data.bikes);
+      const { data, error } = await supabase.from('bikes').select('*').limit(100);
+      if (error) throw error;
+      setBikes(data || []);
     } catch {
       toast.error("Failed to load bikes");
     } finally {
@@ -93,16 +91,12 @@ export function AdminBikes() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${API_URL}/api/admin/bikes/${deleteId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
+      const { error } = await supabase.from('bikes').delete().eq('id', deleteId);
+      if (!error) {
         toast.success("Bike removed from inventory");
         fetchBikes();
       } else {
-        const d = await res.json();
-        toast.error(d.message || "Failed to delete");
+        toast.error(error.message || "Failed to delete");
       }
     } catch {
       toast.error("Connection error");
@@ -114,12 +108,13 @@ export function AdminBikes() {
 
   const handleToggle = async (bike: any) => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/bikes/${bike._id}/availability`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        toast.success(`Bike ${bike.available ? "disabled" : "enabled"}`);
+      const newStatus = bike.status === 'available' ? 'maintenance' : 'available';
+      const { error } = await supabase
+        .from('bikes')
+        .update({ status: newStatus })
+        .eq('id', bike.id);
+      if (!error) {
+        toast.success(`Bike ${newStatus === 'available' ? "enabled" : "disabled"}`);
         fetchBikes();
       }
     } catch {
@@ -130,7 +125,7 @@ export function AdminBikes() {
   const filtered = bikes.filter((b) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    return `${b.name} ${b.brand} ${b.model} ${b.category}`.toLowerCase().includes(q);
+    return `${b.bike_name} ${b.brand} ${b.model} ${b.category}`.toLowerCase().includes(q);
   });
 
   return (
@@ -143,7 +138,7 @@ export function AdminBikes() {
               {bikes.length} TOTAL ASSETS
             </Badge>
             <Badge variant="outline" className="bg-muted text-muted-foreground px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-border">
-              {bikes.filter((b) => b.available).length} ACTIVE
+              {bikes.filter((b) => b.status === 'available').length} ACTIVE
             </Badge>
           </div>
         </div>
@@ -151,16 +146,18 @@ export function AdminBikes() {
           <Button variant="outline" size="lg" onClick={fetchBikes} className="gap-2 rounded-2xl border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground shadow-sm">
             <RefreshCw className={cn("h-4 w-4 text-primary", loading && "animate-spin")} /> Refresh
           </Button>
-          <Button
-            size="lg"
-            className="bg-gradient-brand text-primary-foreground shadow-glow gap-2 rounded-2xl px-8"
-            onClick={() => {
-              setEditBike(null);
-              setAddOpen(true);
-            }}
-          >
-            <Plus className="h-5 w-5" /> Add Bike
-          </Button>
+          {!readOnly && (
+            <Button
+              size="lg"
+              className="bg-gradient-brand text-primary-foreground shadow-glow gap-2 rounded-2xl px-8"
+              onClick={() => {
+                setEditBike(null);
+                setAddOpen(true);
+              }}
+            >
+              <Plus className="h-5 w-5" /> Add Bike
+            </Button>
+          )}
         </div>
       </div>
 
@@ -194,9 +191,9 @@ export function AdminBikes() {
               className="group rounded-[2.5rem] border border-border bg-card overflow-hidden shadow-elegant hover:border-primary/30 hover:shadow-glow transition-all duration-300 flex flex-col"
             >
               <div className="relative h-48 bg-muted/30 overflow-hidden">
-                {getImageSrc(bike.imageUrl) ? (
+                {bike.image_url ? (
                   <img
-                    src={getImageSrc(bike.imageUrl)!}
+                    src={bike.image_url}
                     alt={bike.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
@@ -209,10 +206,10 @@ export function AdminBikes() {
                   <Badge
                     className={cn(
                       "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-lg",
-                      bike.available ? "bg-emerald-500 text-white border-emerald-400" : "bg-rose-500 text-white border-rose-400"
+                      bike.status === 'available' ? "bg-emerald-500 text-white border-emerald-400" : "bg-rose-500 text-white border-rose-400"
                     )}
                   >
-                    {bike.available ? "Available" : "On Hold"}
+                    {bike.status === 'available' ? "Available" : "On Hold"}
                   </Badge>
                 </div>
                 <Badge
@@ -224,7 +221,7 @@ export function AdminBikes() {
               </div>
               <div className="p-6 flex-1 flex flex-col">
                 <div className="mb-4">
-                  <h3 className="font-black text-xl leading-none mb-2 truncate">{bike.name}</h3>
+                  <h3 className="font-black text-xl leading-none mb-2 truncate">{bike.bike_name}</h3>
                   <p className="text-sm font-bold text-muted-foreground">
                     {bike.brand} · {bike.model}
                   </p>
@@ -233,48 +230,50 @@ export function AdminBikes() {
                 <div className="grid grid-cols-2 gap-3 mb-6">
                   <div className="p-3 rounded-2xl bg-muted/30 border border-border/40 flex flex-col gap-1">
                     <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Base Rate</p>
-                    <p className="text-sm font-black text-primary">₹{bike.pricePerDay?.toLocaleString()}/day</p>
+                    <p className="text-sm font-black text-primary">₹{bike.daily_rate?.toLocaleString()}/day</p>
                   </div>
                   <div className="p-3 rounded-2xl bg-muted/30 border border-border/40 flex flex-col gap-1">
                     <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Engine</p>
-                    <p className="text-sm font-black text-foreground">{bike.engineCC}CC · {bike.fuelType}</p>
+                    <p className="text-sm font-black text-foreground">{bike.engine_cc}CC · {bike.fuel_type}</p>
                   </div>
                 </div>
 
-                <div className="mt-auto flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest gap-2 bg-muted/50 border-border/60 hover:bg-primary hover:text-white hover:border-primary transition-all"
-                    onClick={() => {
-                      setEditBike(bike);
-                      setAddOpen(true);
-                    }}
-                  >
-                    <Edit className="h-4 w-4" /> Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest gap-2 transition-all border-border/60",
-                      bike.available ? "text-amber-600 bg-amber-500/5 hover:bg-amber-500 hover:text-white" : "text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500 hover:text-white"
-                    )}
-                    onClick={() => handleToggle(bike)}
-                  >
-                    {bike.available ? (
-                      <ToggleLeft className="h-4 w-4" />
-                    ) : (
-                      <ToggleRight className="h-4 w-4" />
-                    )}
-                    {bike.available ? "Pause" : "Resume"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="h-12 w-12 rounded-xl p-0 text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20"
-                    onClick={() => setDeleteId(bike._id)}
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </Button>
-                </div>
+                {!readOnly && (
+                  <div className="mt-auto flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest gap-2 bg-muted/50 border-border/60 hover:bg-primary hover:text-white hover:border-primary transition-all"
+                      onClick={() => {
+                        setEditBike(bike);
+                        setAddOpen(true);
+                      }}
+                    >
+                      <Edit className="h-4 w-4" /> Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest gap-2 transition-all border-border/60",
+                        bike.status === 'available' ? "text-amber-600 bg-amber-500/5 hover:bg-amber-500 hover:text-white" : "text-emerald-600 bg-emerald-500/5 hover:bg-emerald-500 hover:text-white"
+                      )}
+                      onClick={() => handleToggle(bike)}
+                    >
+                      {bike.status === 'available' ? (
+                        <ToggleLeft className="h-4 w-4" />
+                      ) : (
+                        <ToggleRight className="h-4 w-4" />
+                      )}
+                      {bike.status === 'available' ? "Pause" : "Resume"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="h-12 w-12 rounded-xl p-0 text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20"
+                      onClick={() => setDeleteId(bike.id)}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -289,14 +288,14 @@ export function AdminBikes() {
           if (!open) setEditBike(null);
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto sm:rounded-[2.5rem] border-border bg-card text-foreground shadow-2xl p-0 overflow-hidden">
-          <div className="p-8 border-b border-border bg-muted/30">
+        <DialogContent className="max-w-2xl max-h-[90vh] sm:rounded-[2.5rem] border-border bg-card text-foreground shadow-2xl p-0 overflow-hidden flex flex-col">
+          <div className="p-8 border-b border-border bg-muted/30 shrink-0">
             <DialogTitle className="text-2xl font-black">{editBike ? "Modify Bike" : "Expand Fleet"}</DialogTitle>
             <DialogDescription className="text-muted-foreground font-medium">
               {editBike ? "Update technical specifications." : "Register a new asset in the CampusRide network."}
             </DialogDescription>
           </div>
-          <div className="p-8">
+          <div className="p-8 overflow-y-auto">
             <BikeForm
               bike={editBike}
               token={token}
@@ -355,22 +354,23 @@ function BikeForm({ bike, token, onSuccess, onCancel }: any) {
     "h-12 bg-muted/20 text-foreground font-bold border-border/60 focus-visible:border-primary focus-visible:ring-primary/20 rounded-xl transition-all placeholder:font-medium placeholder:text-muted-foreground/40";
 
   const [form, setFormState] = useState({
-    name: bike?.name || "",
+    name: bike?.bike_name || "",
     brand: bike?.brand || "",
     model: bike?.model || "",
     category: bike?.category || "Street",
-    pricePerDay: bike?.pricePerDay?.toString() || "",
-    pricePerHour: bike?.pricePerHour?.toString() || "",
+    pricePerDay: bike?.daily_rate?.toString() || "",
+    pricePerHour: bike?.hourly_rate?.toString() || "",
     mileage: bike?.mileage?.toString() || "",
-    fuelType: bike?.fuelType || "Petrol",
-    engineCC: bike?.engineCC?.toString() || "",
+    fuelType: bike?.fuel_type || "Petrol",
+    engineCC: bike?.engine_cc?.toString() || "",
     year: bike?.year?.toString() || new Date().getFullYear().toString(),
     description: bike?.description || "",
-    available: bike?.available ?? true,
-    helmetIncluded: bike?.helmetIncluded ?? true,
-    securityDeposit: bike?.securityDeposit?.toString() || "1000",
-    pickupLocation: bike?.pickupLocation || "Campus Hub Main Gate",
+    available: bike?.status === 'available' || bike?.status === undefined,
+    helmetIncluded: bike?.helmet_included ?? true,
+    securityDeposit: bike?.security_deposit?.toString() || "1000",
+    pickupLocation: bike?.pickup_location || "Campus Hub Main Gate",
     color: bike?.color || "",
+    registrationNumber: bike?.registration_number || "",
   });
 
   const set = (field: string, value: any) => {
@@ -415,31 +415,67 @@ function BikeForm({ bike, token, onSuccess, onCancel }: any) {
       return;
     }
     setLoading(true);
-    const data = new FormData();
-    Object.entries(form).forEach(([k, v]) => data.append(k, String(v)));
-    if (imageFile) data.append("image", imageFile);
     try {
-      const url = bike ? `${API_URL}/api/admin/bikes/${bike._id}` : `${API_URL}/api/admin/bikes`;
-      const res = await fetch(url, {
-        method: bike ? "PUT" : "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: data,
-      });
-      const result = await res.json();
-      if (res.ok && result.success) {
-        toast.success(bike ? "Asset updated" : "Asset registered");
-        onSuccess();
-      } else {
-        toast.error(result.message || "Operation failed");
+      let image_url = bike?.image_url;
+
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
+        
+        const { error: uploadError, data } = await supabase.storage
+          .from('bike-images')
+          .upload(filePath, imageFile);
+          
+        if (uploadError) {
+          console.error("Storage Upload Error:", uploadError);
+          toast.error(`Image upload failed: ${uploadError.message}. Using placeholder.`);
+          image_url = 'https://via.placeholder.com/600x400?text=No+Image'; // Placeholder fallback
+        } else {
+          const { data: { publicUrl } } = supabase.storage
+            .from('bike-images')
+            .getPublicUrl(filePath);
+            
+          image_url = publicUrl;
+        }
+      } else if (!image_url) {
+        image_url = 'https://via.placeholder.com/600x400?text=No+Image';
       }
-    } catch {
-      toast.error("Network error");
+
+      const rideData = {
+        bike_name: form.name,
+        brand: form.brand,
+        model: form.model,
+        category: form.category,
+        daily_rate: Number(form.pricePerDay),
+        hourly_rate: Number(form.pricePerHour),
+        fuel_type: form.fuelType || null,
+        mileage: Number(form.mileage) || null,
+        status: form.available ? 'available' : 'maintenance',
+        image_url,
+        available: form.available,
+        helmet_included: form.helmetIncluded,
+      };
+
+      if (bike) {
+        const { error } = await supabase.from('bikes').update(rideData).eq('id', bike.id);
+        if (error) throw error;
+        toast.success("Asset updated");
+      } else {
+        const { error } = await supabase.from('bikes').insert(rideData);
+        if (error) throw error;
+        toast.success("Asset registered");
+      }
+      onSuccess();
+    } catch (err: any) {
+      console.error("Supabase Operation Failed:", err);
+      toast.error(err.message || err.error_description || "Database operation failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const existingImg = bike ? getImageSrc(bike.imageUrl) : null;
+  const existingImg = bike ? bike.image_url : null;
   const previewSrc = imagePreview || existingImg;
 
   return (

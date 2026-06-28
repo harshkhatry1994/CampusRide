@@ -6,25 +6,10 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import connectDB from './config/db.js';
-import authRoutes from './routes/auth.routes.js';
-import bikeRoutes from './routes/bike.routes.js';
-import bookingRoutes from './routes/booking.routes.js';
-import adminRoutes from './routes/admin.routes.js';
-import membershipRoutes from './routes/membership.routes.js';
-import contactRoutes from './routes/contact.routes.js';
-import invoiceRoutes from './routes/invoice.routes.js';
-import configurePassport from './config/passport.js';
-import passport from 'passport';
-
 // Load environment variables
 dotenv.config();
 
-// Connect to MongoDB
-connectDB();
-
-// Configure Passport
-configurePassport();
+// MongoDB is removed - Using Supabase now.
 
 const app = express();
 
@@ -47,6 +32,8 @@ app.use(helmet({
   }
 }));
 
+const localOriginRegex = /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   'http://localhost:5173',
@@ -56,7 +43,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || localOriginRegex.test(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -67,7 +54,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(passport.initialize());
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
@@ -76,16 +62,8 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 //      API ROUTES
 // =========================
 app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'CampusRide API is running 🚲' });
+  res.json({ success: true, message: 'CampusRide API is running 🚲 (Supabase Migration in Progress)' });
 });
-
-app.use('/api/auth', authRoutes);
-app.use('/api/bikes', bikeRoutes);
-app.use('/api/bookings', bookingRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/membership', membershipRoutes);
-app.use('/api/contact', contactRoutes);
-app.use('/api/invoices', invoiceRoutes);
 
 // =========================
 //    404 & ERROR HANDLER

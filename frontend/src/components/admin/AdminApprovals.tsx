@@ -30,8 +30,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { supabase } from "@/lib/supabase";
 
 export function AdminApprovals({ onCountChange }: { onCountChange?: (count: number) => void }) {
   const { token } = useAuth();
@@ -43,20 +42,21 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [mRes, bRes] = await Promise.all([
-        fetch(`${API_URL}/api/membership/admin/requests`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_URL}/api/admin/bookings?status=pending`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      const { data: mData, error: mError } = await supabase
+        .from('drivers')
+        .select('*')
+        .eq('is_verified', false);
 
-      const mData = await mRes.json();
-      const bData = await bRes.json();
+      const { data: bData, error: bError } = await supabase
+        .from('rentals')
+        .select('*')
+        .eq('status', 'Pending');
 
-      const mRequests = mData.success ? mData.data : [];
-      const bRequests = bData.success ? bData.data.filter((b: any) => b.status === "pending") : [];
+      if (mError) throw mError;
+      if (bError) throw bError;
+
+      const mRequests = mData || [];
+      const bRequests = bData || [];
 
       setMemberships(mRequests);
       setBookings(bRequests);
@@ -73,23 +73,18 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
 
   useEffect(() => {
     fetchData();
-  }, [token]);
+  }, []);
 
   const approveMembership = async (id: string) => {
     setActionLoading("m-approve-" + id);
     try {
-      const res = await fetch(`${API_URL}/api/membership/admin/requests/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: "approved" }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        const updated = memberships.filter((m) => m._id !== id);
-        setMemberships(updated);
-        toast.success("Membership Approved!");
-        if (onCountChange) onCountChange(updated.length + bookings.length);
-      }
+      const { error } = await supabase.from('drivers').update({ is_verified: true }).eq('id', id);
+      if (error) throw error;
+      
+      const updated = memberships.filter((m) => m.id !== id);
+      setMemberships(updated);
+      toast.success("Driver Approved!");
+      if (onCountChange) onCountChange(updated.length + bookings.length);
     } catch {
       toast.error("Action failed");
     } finally {
@@ -103,18 +98,13 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
 
     setActionLoading("m-reject-" + id);
     try {
-      const res = await fetch(`${API_URL}/api/membership/admin/requests/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: "rejected", reviewNote: note }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        const updated = memberships.filter((m) => m._id !== id);
-        setMemberships(updated);
-        toast.error("Membership Rejected.");
-        if (onCountChange) onCountChange(updated.length + bookings.length);
-      }
+      const { error } = await supabase.from('drivers').delete().eq('id', id);
+      if (error) throw error;
+      
+      const updated = memberships.filter((m) => m.id !== id);
+      setMemberships(updated);
+      toast.error("Driver Rejected.");
+      if (onCountChange) onCountChange(updated.length + bookings.length);
     } catch {
       toast.error("Action failed");
     } finally {
@@ -125,19 +115,14 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
   const doBookingAction = async (id: string, action: "approve" | "reject") => {
     setActionLoading("b-" + action + "-" + id);
     try {
-      const res = await fetch(`${API_URL}/api/admin/bookings/${id}/${action}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        const updated = bookings.filter((b) => b._id !== id);
-        setBookings(updated);
-        toast.success(`Booking ${action}d successfully`);
-        if (onCountChange) onCountChange(memberships.length + updated.length);
-      } else {
-        toast.error(data.message || "Action failed");
-      }
+      const status = action === "approve" ? "Confirmed" : "Rejected";
+      const { error } = await supabase.from('rentals').update({ status }).eq('id', id);
+      if (error) throw error;
+      
+      const updated = bookings.filter((b) => b.id !== id);
+      setBookings(updated);
+      toast.success(`Booking ${action}d successfully`);
+      if (onCountChange) onCountChange(memberships.length + updated.length);
     } catch {
       toast.error("Connection error");
     } finally {
@@ -220,55 +205,55 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
                   ) : (
                     memberships.map((m) => (
                       <TableRow
-                        key={m._id}
+                        key={m.id}
                         className="hover:bg-muted/10 transition-colors border-border/40"
                       >
                         <TableCell className="px-8 py-5">
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-xl bg-muted border border-border flex items-center justify-center text-primary font-black overflow-hidden shadow-inner">
-                              {m.user?.avatar ? (
-                                <img src={m.user.avatar} className="h-full w-full object-cover" />
+                              {m.profiles?.avatar_url ? (
+                                <img src={m.profiles.avatar_url} className="h-full w-full object-cover" />
                               ) : (
                                 <User className="h-5 w-5 text-muted-foreground" />
                               )}
                             </div>
                             <div>
-                              <p className="font-black text-sm text-foreground">{m.user?.name}</p>
-                              <p className="text-[10px] font-bold text-muted-foreground">{m.user?.email}</p>
+                              <p className="font-black text-sm text-foreground">{m.profiles?.email.split('@')[0]}</p>
+                              <p className="text-[10px] font-bold text-muted-foreground">{m.profiles?.email}</p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <code className="text-[10px] font-black text-amber-600 bg-amber-500/5 px-2 py-1 rounded-lg border border-amber-500/10 tracking-tighter">
-                            {m.transactionId}
+                            {m.license_number}
                           </code>
                         </TableCell>
-                        <TableCell className="font-black text-sm text-foreground">₹{m.amount}</TableCell>
+                        <TableCell className="font-black text-sm text-foreground">{m.vehicle_type}</TableCell>
                         <TableCell className="text-xs font-bold text-muted-foreground">
-                          {new Date(m.createdAt).toLocaleDateString()}
+                          {new Date(m.created_at).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-right px-8 space-x-2">
                           <Button
                             variant="ghost"
-                            onClick={() => rejectMembership(m._id)}
+                            onClick={() => rejectMembership(m.id)}
                             disabled={!!actionLoading}
                             className="text-destructive hover:bg-destructive/10 h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest"
                           >
-                            {actionLoading === "m-reject-" + m._id ? (
+                            {actionLoading === "m-reject-" + m.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               "Reject"
                             )}
                           </Button>
                           <Button
-                            onClick={() => approveMembership(m._id)}
+                            onClick={() => approveMembership(m.id)}
                             disabled={!!actionLoading}
                             className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow h-10 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest"
                           >
-                            {actionLoading === "m-approve-" + m._id ? (
+                            {actionLoading === "m-approve-" + m.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              "Approve & Activate"
+                              "Approve Driver"
                             )}
                           </Button>
                         </TableCell>
@@ -339,15 +324,15 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
                   ) : (
                     bookings.map((b) => (
                       <TableRow
-                        key={b._id}
+                        key={b.id}
                         className="hover:bg-muted/10 transition-colors border-border/40"
                       >
                         <TableCell className="px-8 py-5">
-                          <p className="font-black text-sm text-foreground">{b.riderDetails?.name || b.user?.name}</p>
-                          <p className="text-[10px] font-bold text-muted-foreground">REF: {b.bookingId}</p>
+                          <p className="font-black text-sm text-foreground">{b.profiles?.email.split('@')[0]}</p>
+                          <p className="text-[10px] font-bold text-muted-foreground">REF: {b.id.substring(0,8)}</p>
                         </TableCell>
-                        <TableCell className="font-black text-sm text-foreground">{b.bike?.name}</TableCell>
-                        <TableCell className="font-black text-sm text-primary">₹{b.pricing?.totalAmount?.toLocaleString()}</TableCell>
+                        <TableCell className="font-black text-sm text-foreground">{b.bikes?.bike_name || b.bikes?.brand}</TableCell>
+                        <TableCell className="font-black text-sm text-primary">₹{b.total_price?.toLocaleString()}</TableCell>
                         <TableCell>
                           <Badge
                             className="text-[9px] font-black uppercase tracking-widest text-emerald-600 border-emerald-500/20 bg-emerald-500/5 px-2 py-0.5 rounded-lg"
@@ -358,22 +343,22 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
                         <TableCell className="text-right px-8 space-x-2">
                           <Button
                             variant="ghost"
-                            onClick={() => doBookingAction(b._id, "reject")}
+                            onClick={() => doBookingAction(b.id, "reject")}
                             disabled={!!actionLoading}
                             className="text-destructive hover:bg-destructive/10 h-10 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest"
                           >
-                            {actionLoading === "b-reject-" + b._id ? (
+                            {actionLoading === "b-reject-" + b.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               "Reject"
                             )}
                           </Button>
                           <Button
-                            onClick={() => doBookingAction(b._id, "approve")}
+                            onClick={() => doBookingAction(b.id, "approve")}
                             disabled={!!actionLoading}
                             className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow h-10 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest"
                           >
-                            {actionLoading === "b-approve-" + b._id ? (
+                            {actionLoading === "b-approve-" + b.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               "Confirm Ride"

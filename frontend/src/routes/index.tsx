@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight, Zap, Shield, Sparkles, Clock, Bike as BikeIcon, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
 import { BikeCard, type Bike } from "@/components/bikes/BikeCard";
 import heroBike from "@/assets/hero-bike.jpg";
 
@@ -23,14 +24,13 @@ function Home() {
   const [featured, setFeatured] = useState<Bike[]>([]);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/bikes`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setFeatured((data.data.bikes?.slice(0, 3) as Bike[]) || []);
-        }
-      })
-      .catch((err) => console.error("Failed to fetch featured bikes:", err));
+    async function loadBikes() {
+      const { data, error } = await supabase.from('bikes').select('*').limit(3);
+      if (!error && data) {
+        setFeatured(data as Bike[]);
+      }
+    }
+    loadBikes();
   }, []);
 
   return (
@@ -151,7 +151,7 @@ function Home() {
         </div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {featured.map((b) => (
-            <BikeCard key={b._id} bike={b} />
+            <BikeCard key={b.id} bike={b} />
           ))}
         </div>
       </section>

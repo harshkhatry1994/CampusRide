@@ -17,6 +17,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as BikesRouteImport } from './routes/bikes'
+import { Route as AdminPortalRouteImport } from './routes/admin-portal'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -30,6 +31,7 @@ import { Route as BookingStatusRouteImport } from './routes/booking.status'
 import { Route as BookingFailedRouteImport } from './routes/booking.failed'
 import { Route as BookingBikeIdRouteImport } from './routes/booking.$bikeId'
 import { Route as BikesBikeIdRouteImport } from './routes/bikes.$bikeId'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -69,6 +71,11 @@ const ContactRoute = ContactRouteImport.update({
 const BikesRoute = BikesRouteImport.update({
   id: '/bikes',
   path: '/bikes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPortalRoute = AdminPortalRouteImport.update({
+  id: '/admin-portal',
+  path: '/admin-portal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -136,11 +143,17 @@ const BikesBikeIdRoute = BikesBikeIdRouteImport.update({
   path: '/$bikeId',
   getParentRoute: () => BikesRoute,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/admin-portal': typeof AdminPortalRoute
   '/bikes': typeof BikesRouteWithChildren
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
@@ -149,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/premium': typeof PremiumRoute
   '/premium-payment': typeof PremiumPaymentRoute
   '/signup': typeof SignupRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/bikes/$bikeId': typeof BikesBikeIdRoute
   '/booking/$bikeId': typeof BookingBikeIdRoute
   '/booking/failed': typeof BookingFailedRoute
@@ -164,6 +178,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/admin-portal': typeof AdminPortalRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
@@ -171,6 +186,7 @@ export interface FileRoutesByTo {
   '/premium': typeof PremiumRoute
   '/premium-payment': typeof PremiumPaymentRoute
   '/signup': typeof SignupRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/bikes/$bikeId': typeof BikesBikeIdRoute
   '/booking/$bikeId': typeof BookingBikeIdRoute
   '/booking/failed': typeof BookingFailedRoute
@@ -187,6 +203,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/admin-portal': typeof AdminPortalRoute
   '/bikes': typeof BikesRouteWithChildren
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
@@ -195,6 +212,7 @@ export interface FileRoutesById {
   '/premium': typeof PremiumRoute
   '/premium-payment': typeof PremiumPaymentRoute
   '/signup': typeof SignupRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/bikes/$bikeId': typeof BikesBikeIdRoute
   '/booking/$bikeId': typeof BookingBikeIdRoute
   '/booking/failed': typeof BookingFailedRoute
@@ -212,6 +230,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/admin-portal'
     | '/bikes'
     | '/contact'
     | '/dashboard'
@@ -220,6 +239,7 @@ export interface FileRouteTypes {
     | '/premium'
     | '/premium-payment'
     | '/signup'
+    | '/auth/callback'
     | '/bikes/$bikeId'
     | '/booking/$bikeId'
     | '/booking/failed'
@@ -235,6 +255,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/admin-portal'
     | '/contact'
     | '/dashboard'
     | '/login'
@@ -242,6 +263,7 @@ export interface FileRouteTypes {
     | '/premium'
     | '/premium-payment'
     | '/signup'
+    | '/auth/callback'
     | '/bikes/$bikeId'
     | '/booking/$bikeId'
     | '/booking/failed'
@@ -257,6 +279,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/admin-portal'
     | '/bikes'
     | '/contact'
     | '/dashboard'
@@ -265,6 +288,7 @@ export interface FileRouteTypes {
     | '/premium'
     | '/premium-payment'
     | '/signup'
+    | '/auth/callback'
     | '/bikes/$bikeId'
     | '/booking/$bikeId'
     | '/booking/failed'
@@ -281,6 +305,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRoute
+  AdminPortalRoute: typeof AdminPortalRoute
   BikesRoute: typeof BikesRouteWithChildren
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
@@ -289,6 +314,7 @@ export interface RootRouteChildren {
   PremiumRoute: typeof PremiumRoute
   PremiumPaymentRoute: typeof PremiumPaymentRoute
   SignupRoute: typeof SignupRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   BookingBikeIdRoute: typeof BookingBikeIdRoute
   BookingFailedRoute: typeof BookingFailedRoute
   BookingStatusRoute: typeof BookingStatusRoute
@@ -355,6 +381,13 @@ declare module '@tanstack/react-router' {
       path: '/bikes'
       fullPath: '/bikes'
       preLoaderRoute: typeof BikesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-portal': {
+      id: '/admin-portal'
+      path: '/admin-portal'
+      fullPath: '/admin-portal'
+      preLoaderRoute: typeof AdminPortalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -448,6 +481,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BikesBikeIdRouteImport
       parentRoute: typeof BikesRoute
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -467,6 +507,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRoute,
+  AdminPortalRoute: AdminPortalRoute,
   BikesRoute: BikesRouteWithChildren,
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
@@ -475,6 +516,7 @@ const rootRouteChildren: RootRouteChildren = {
   PremiumRoute: PremiumRoute,
   PremiumPaymentRoute: PremiumPaymentRoute,
   SignupRoute: SignupRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   BookingBikeIdRoute: BookingBikeIdRoute,
   BookingFailedRoute: BookingFailedRoute,
   BookingStatusRoute: BookingStatusRoute,

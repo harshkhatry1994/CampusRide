@@ -51,3 +51,12 @@ export const riderDocumentsUpload = upload.fields([
   { name: 'passport', maxCount: 1 },
   { name: 'additional', maxCount: 1 }
 ]);
+
+// Identity document upload for student/worker verification
+export const identityDocUpload = upload.single('idDocument');
+
+// Geo-tagged payment selfie + payment proof upload
+export const geoSelfieUpload = upload.fields([
+  { name: 'geoSelfie', maxCount: 1 },
+  { name: 'paymentProof', maxCount: 1 },
+]);

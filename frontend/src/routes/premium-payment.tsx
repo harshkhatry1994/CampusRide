@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/premium-payment")({
   head: () => ({ meta: [{ title: "Premium Checkout" }] }),
@@ -56,31 +57,30 @@ function PremiumPaymentPage() {
 
   const handlePayment = async () => {
     if (!transactionId || transactionId.length < 6) {
-      toast.error("Please enter a valid Transaction ID");
+      toast.error("Please enter a valid Transaction ID (min 6 characters)");
+      return;
+    }
+    if (!user) {
+      toast.error("Please login to continue");
       return;
     }
     setSubmitting(true);
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/membership/request`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ transactionId }),
+      const { error } = await supabase.from('membership_requests').insert({
+        user_id: user.id,
+        utr_number: transactionId,
+        amount: 999,
+        status: 'pending',
       });
 
-      const data = await res.json();
+      if (error) throw error;
 
-      if (data.success) {
-        setSuccess(true);
-        toast.success("Payment details submitted for verification!");
-      } else {
-        toast.error(data.message || "Failed to submit request");
-      }
-    } catch (err) {
-      toast.error("Connection error. Please try again.");
+      setSuccess(true);
+      toast.success("Payment details submitted for verification!");
+    } catch (err: any) {
+      console.error('Membership request error:', err);
+      toast.error(err.message || "Failed to submit request. Please try again.");
     } finally {
       setSubmitting(false);
     }

@@ -26,6 +26,7 @@ import {
   Eye,
   FileText,
   Printer,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import { generateReceipt } from "@/lib/receipt";
 import { cn } from "@/lib/utils";
 
@@ -51,12 +53,10 @@ export const Route = createFileRoute("/dashboard")({
 const API_URL = import.meta.env.VITE_API_URL;
 
 function Dashboard() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
     if (!token) {
@@ -70,19 +70,44 @@ function Dashboard() {
       return;
     }
 
-    fetch(`${API_URL}/api/bookings/my`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) setBookings(data.data);
-        setLoading(false);
-      })
-      .catch(() => {
+    if (!user) {
+      return;
+    }
+
+    const userId = user.id;
+
+    async function loadBookings() {
+      const { data, error } = await supabase.from('rentals').select('*, bikes(*)').eq('user_id', userId).order('created_at', { ascending: false });
+      if (error) {
         toast.error("Failed to load your rides");
-        setLoading(false);
-      });
-  }, [token, isAdmin, navigate]);
+      } else if (data) {
+        setBookings(data);
+      }
+      setLoading(false);
+    }
+    loadBookings();
+
+    // Realtime subscription: auto-refresh when admin updates rental status
+    const channel = supabase
+      .channel("dashboard-rentals")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "rentals",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          loadBookings();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [token, isAdmin, navigate, user]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -152,7 +177,7 @@ function Dashboard() {
             ) : (
               <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
                 {bookings.map((b) => (
-                  <RideCard key={b._id} booking={b} />
+                  <RideCard key={b.id} booking={b} />
                 ))}
               </div>
             )}
@@ -173,7 +198,8 @@ function Dashboard() {
 
 function RideCard({ booking }: { booking: any }) {
   const [showDetails, setShowDetails] = useState(false);
-  const bike = booking.bike;
+  const bike = booking.bikes || booking.bike;
+  const statusLower = booking.status?.toLowerCase();
   const statusColors: any = {
     pending: "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]",
     confirmed: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]",
@@ -189,21 +215,21 @@ function RideCard({ booking }: { booking: any }) {
           <Badge
             className={cn(
               "capitalize px-3 py-0.5 rounded-full border",
-              statusColors[booking.status] || "bg-muted text-muted-foreground border-border/40"
+              statusColors[statusLower] || "bg-muted text-muted-foreground border-border/40"
             )}
           >
             {booking.status}
           </Badge>
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-            ID: {booking.bookingId}
+            ID: {booking.id?.split('-')[0]}
           </span>
         </div>
 
         <div className="flex items-center gap-4 mb-6">
           <div className="h-16 w-20 rounded-2xl bg-muted/30 border border-border/40 overflow-hidden shrink-0">
-            {bike?.imageUrl ? (
+            {bike?.image_url ? (
               <img
-                src={bike.imageUrl.startsWith("http") ? bike.imageUrl : `${API_URL}${bike.imageUrl}`}
+                src={bike.image_url.startsWith("http") ? bike.image_url : `${API_URL}${bike.image_url}`}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
             ) : (
@@ -213,7 +239,7 @@ function RideCard({ booking }: { booking: any }) {
             )}
           </div>
           <div className="min-w-0">
-            <h3 className="font-bold leading-tight truncate">{bike?.name}</h3>
+            <h3 className="font-bold leading-tight truncate">{bike?.bike_name || bike?.brand}</h3>
             <p className="text-xs text-muted-foreground truncate">
               {bike?.brand} {bike?.model}
             </p>
@@ -223,18 +249,18 @@ function RideCard({ booking }: { booking: any }) {
         <div className="space-y-3 mb-6">
           <div className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
             <Calendar className="h-3.5 w-3.5 text-primary" />
-            {new Date(booking.startDate).toLocaleDateString()} -{" "}
-            {new Date(booking.endDate).toLocaleDateString()}
+            {new Date(booking.start_date).toLocaleDateString()} -{" "}
+            {new Date(booking.end_date).toLocaleDateString()}
           </div>
           <div className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
             <Clock className="h-3.5 w-3.5 text-primary" />
-            {booking.pickupTime} (Pickup)
+            {new Date(booking.start_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (Pickup)
           </div>
         </div>
 
         <div className="pt-4 border-t border-border/40 flex items-center justify-between">
           <div className="flex gap-2">
-            <Link to="/invoice/$bookingId" params={{ bookingId: booking._id }}>
+            <Link to="/invoice/$bookingId" params={{ bookingId: booking.id }}>
               <Button
                 size="sm"
                 variant="ghost"
@@ -249,7 +275,7 @@ function RideCard({ booking }: { booking: any }) {
               className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-muted rounded-lg"
               onClick={(e) => {
                 e.stopPropagation();
-                window.open(`/invoice/${booking._id}`, "_blank");
+                window.open(`/invoice/${booking.id}`, "_blank");
               }}
             >
               <Download className="h-3.5 w-3.5 mr-1" /> PDF
@@ -261,7 +287,7 @@ function RideCard({ booking }: { booking: any }) {
                 Total
               </p>
               <p className="text-base font-black">
-                ₹{booking.pricing?.totalAmount.toLocaleString()}
+                ₹{Number(booking.total_price).toLocaleString()}
               </p>
             </div>
             <Button
@@ -282,7 +308,7 @@ function RideCard({ booking }: { booking: any }) {
             <Sparkles className="absolute right-[-20px] top-[-20px] h-40 w-40 opacity-20 text-white" />
             <div className="absolute bottom-6 left-8">
               <h2 className="text-3xl font-black text-white">Ride Details</h2>
-              <p className="text-white/80 font-medium">Booking ID: {booking.bookingId}</p>
+              <p className="text-white/80 font-medium">Booking ID: {booking.id?.split('-')[0]}</p>
             </div>
           </div>
 
@@ -295,10 +321,10 @@ function RideCard({ booking }: { booking: any }) {
                 <Badge
                   className={cn(
                     "rounded-full px-4 py-1 animate-pulse border",
-                    statusColors[booking.status],
+                    statusColors[statusLower],
                   )}
                 >
-                  {booking.currentMilestone?.replace("_", " ") || booking.status}
+                  {booking.status}
                 </Badge>
               </div>
 
@@ -391,15 +417,15 @@ function RideCard({ booking }: { booking: any }) {
                 </h4>
                 <div className="flex items-center gap-4 p-4 rounded-2xl bg-muted/30 border border-border/40">
                   <div className="h-12 w-16 rounded-xl bg-muted/50 border border-border/40 overflow-hidden shrink-0">
-                    {bike?.imageUrl && (
+                    {bike?.image_url && (
                       <img
-                        src={bike.imageUrl.startsWith("http") ? bike.imageUrl : `${API_URL}${bike.imageUrl}`}
+                        src={bike.image_url.startsWith("http") ? bike.image_url : `${API_URL}${bike.image_url}`}
                         className="w-full h-full object-cover"
                       />
                     )}
                   </div>
                   <div>
-                    <p className="font-bold">{bike?.name}</p>
+                    <p className="font-bold">{bike?.bike_name || bike?.brand}</p>
                     <p className="text-xs text-muted-foreground">
                       {bike?.brand} {bike?.model}
                     </p>
@@ -427,46 +453,24 @@ function RideCard({ booking }: { booking: any }) {
             <div className="p-6 rounded-3xl bg-muted/20 border border-border/40 space-y-4">
               <div className="flex justify-between items-center pb-4 border-b border-border/40">
                 <h4 className="font-bold text-lg">Invoice Summary</h4>
-                <Badge className={cn("border", statusColors[booking.status])}>{booking.status}</Badge>
+                <Badge className={cn("border", statusColors[statusLower])}>{booking.status}</Badge>
               </div>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Base Fare (
-                    {Math.ceil(
-                      (new Date(booking.endDate).getTime() -
-                        new Date(booking.startDate).getTime()) /
-                        (1000 * 3600 * 24),
-                    )}{" "}
-                    Days)
-                  </span>
-                  <span className="font-semibold">₹{booking.pricing.basePrice}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Security Deposit</span>
-                  <span className="font-semibold">₹{booking.pricing.securityDeposit}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">GST & Charges</span>
-                  <span className="font-semibold">
-                    ₹{booking.pricing.gst + booking.pricing.platformFee}
-                  </span>
-                </div>
-                <div className="flex justify-between text-lg font-black pt-4 mt-2 border-t border-border/40">
+                <div className="flex justify-between text-lg font-black pt-4 border-t border-border/40">
                   <span>Grand Total</span>
-                  <span className="text-primary">₹{booking.pricing.totalAmount}</span>
+                  <span className="text-primary">₹{booking.total_price}</span>
                 </div>
               </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 p-8 pt-0">
-              <Link to="/invoice/$bookingId" params={{ bookingId: booking._id }} className="flex-1">
+              <Link to="/invoice/$bookingId" params={{ bookingId: booking.id }} className="flex-1">
                 <Button className="w-full h-14 rounded-2xl gap-2 font-bold bg-foreground text-background hover:bg-foreground/90">
                   <Eye className="h-5 w-5" /> View Premium Invoice
                 </Button>
               </Link>
               <Button
-                onClick={() => window.open(`/invoice/${booking._id}?download=true`, "_blank")}
+                onClick={() => window.open(`/invoice/${booking.id}?download=true`, "_blank")}
                 className="flex-1 h-14 rounded-2xl gap-2 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow"
               >
                 <Download className="h-5 w-5" /> Download PDF
@@ -474,7 +478,7 @@ function RideCard({ booking }: { booking: any }) {
               <Button
                 variant="outline"
                 className="h-14 w-14 rounded-2xl p-0 border-border/40"
-                onClick={() => window.open(`/invoice/${booking._id}?print=true`, "_blank")}
+                onClick={() => window.open(`/invoice/${booking.id}?print=true`, "_blank")}
               >
                 <Printer className="h-5 w-5" />
               </Button>
@@ -485,11 +489,11 @@ function RideCard({ booking }: { booking: any }) {
                   if (navigator.share) {
                     navigator.share({
                       title: "CampusRide Invoice",
-                      url: window.location.origin + `/invoice/${booking._id}`,
+                      url: window.location.origin + `/invoice/${booking.id}`,
                     });
                   } else {
                     navigator.clipboard.writeText(
-                      window.location.origin + `/admin/invoice/${booking._id}`,
+                      window.location.origin + `/invoice/${booking.id}`,
                     );
                     toast.success("Link copied!");
                   }
@@ -515,7 +519,7 @@ function RideCard({ booking }: { booking: any }) {
 }
 
 function ActivityTab({ bookings }: any) {
-  const totalSpent = bookings.reduce((sum: any, b: any) => sum + (b.pricing?.totalAmount || 0), 0);
+  const totalSpent = bookings.reduce((sum: any, b: any) => sum + Number(b.total_price || 0), 0);
   return (
     <div className="grid gap-6 md:grid-cols-3">
       <StatCard
@@ -565,10 +569,13 @@ function ActivityTab({ bookings }: any) {
 
 function RewardsTab({ bookings }: any) {
   const { user } = useAuth();
-  const isPremium = user?.role === "premium";
+  const isPremium = user?.is_premium === true;
 
   // Smart Logic: Only count completed rides for loyalty
-  const completedRides = bookings.filter((b: any) => b.status === "completed").length;
+  const completedRides = bookings.filter((b: any) => {
+    const s = b.status || b.lifecycle_status || "";
+    return s.toLowerCase().trim() === "completed";
+  }).length;
 
   // Smart Multiplier: Premium members get 2x progression
   const effectiveRides = isPremium ? completedRides * 2 : completedRides;
@@ -763,5 +770,3 @@ function StatCard({ icon, title, value, desc }: any) {
     </div>
   );
 }
-
-import { Loader2 } from "lucide-react";

@@ -9,16 +9,16 @@ export const generateReceipt = (booking: any) => {
 
   try {
     const doc = new jsPDF();
-    const bike = booking.bike || {};
-    const rider = booking.riderDetails || {};
+    const bike = booking.rides || booking.bike || {};
+    const rider = booking.users || booking.riderDetails || {};
     const pricing = booking.pricing || {
-      basePrice: 0,
-      securityDeposit: 0,
-      gst: 0,
-      platformFee: 0,
-      totalAmount: 0,
+      basePrice: booking.total_price ? Math.round(booking.total_price / 1.18 - 1049) : 0, // Roughly reverse engineer base price if not stored
+      securityDeposit: 1000,
+      gst: booking.total_price ? Math.round((booking.total_price / 1.18 - 1049) * 0.18) : 0,
+      platformFee: 49,
+      totalAmount: booking.total_price || 0,
     };
-    const bookingIdStr = (booking.bookingId || String(booking._id).slice(-8)).toUpperCase();
+    const bookingIdStr = (booking.bookingId || String(booking.id || booking._id).split('-')[0]).toUpperCase();
 
     // Header Branding
     doc.setFillColor(38, 38, 38);
@@ -56,7 +56,7 @@ export const generateReceipt = (booking: any) => {
     doc.setFont("helvetica", "normal");
     doc.text(`Bike: ${bike.name || "Motorcycle"}`, 120, 78);
     doc.text(`Model: ${bike.brand || ""} ${bike.model || ""}`, 120, 84);
-    doc.text(`Fuel: ${bike.fuelType || "Petrol"}`, 120, 90);
+    doc.text(`Fuel: ${bike.fuel_type || bike.fuelType || "Petrol"}`, 120, 90);
 
     // Rental Timing Table
     (doc as any).autoTable({
@@ -64,12 +64,12 @@ export const generateReceipt = (booking: any) => {
       head: [["Pickup Location", "Pickup Time", "Return Time", "Duration"]],
       body: [
         [
-          bike.pickupLocation || "Campus Hub",
-          booking.startDate
-            ? `${new Date(booking.startDate).toLocaleDateString()} ${booking.pickupTime || ""}`
+          bike.pickup_location || bike.pickupLocation || "Campus Hub",
+          booking.start_date || booking.startDate
+            ? `${new Date(booking.start_date || booking.startDate).toLocaleDateString()} ${new Date(booking.start_date || booking.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
             : "N/A",
-          booking.endDate
-            ? `${new Date(booking.endDate).toLocaleDateString()} ${booking.returnTime || ""}`
+          booking.end_date || booking.endDate
+            ? `${new Date(booking.end_date || booking.endDate).toLocaleDateString()} ${new Date(booking.end_date || booking.endDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
             : "N/A",
           "1 Day",
         ],

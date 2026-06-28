@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BikeCard, type Bike } from "@/components/bikes/BikeCard";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/bikes/")({
   head: () => ({
@@ -27,30 +28,42 @@ function BikesPage() {
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("all");
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/bikes`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setBikes(data.data.bikes || []);
-        } else {
-          setBikes([]);
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch bikes:", err);
-        setLoading(false);
-      });
+    async function fetchBikes() {
+      const { data, error } = await supabase.from('bikes').select('*');
+      console.log("BIKES FROM DB:", data);
+      if (error) {
+        console.error("Failed to fetch bikes:", error);
+        setBikes([]);
+      } else if (data) {
+        const mapped = data.map((b: any) => ({
+          ...b,
+          title: b.bike_name,
+          name: b.bike_name,
+          category: b.category || "Cruiser",
+          image: b.image_url || "/src/assets/bike-1.jpg",
+          image_url: b.image_url || "/src/assets/bike-1.jpg",
+          model: b.model || "Standard",
+          daily_rate: b.daily_rate || 500,
+          status: b.status || "available",
+          registrationNumber: b.registration_number,
+        }));
+        setBikes(mapped);
+      }
+      setLoading(false);
+    }
+    fetchBikes();
   }, []);
 
   const filtered = useMemo(() => {
-    return bikes.filter((b) => {
-      if (category !== "all" && b.category !== category) return false;
-      const searchStr = `${b.name} ${b.brand} ${b.model}`.toLowerCase();
+    const filteredBikes = bikes.filter((b) => {
+      // Removed filters requiring missing fields (category and model)
+      const searchStr = `${b.bike_name || ''} ${b.brand || ''}`.toLowerCase();
       if (q && !searchStr.includes(q.toLowerCase())) return false;
       return true;
     });
-  }, [bikes, q, category]);
+    console.log("FILTERED BIKES:", filteredBikes);
+    return filteredBikes;
+  }, [bikes, q]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 py-12 animate-in fade-in duration-500">
@@ -113,7 +126,7 @@ function BikesPage() {
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((b) => (
-            <BikeCard key={b._id} bike={b} />
+            <BikeCard key={b.id} bike={b} />
           ))}
         </div>
       )}

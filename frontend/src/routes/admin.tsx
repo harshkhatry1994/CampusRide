@@ -13,6 +13,8 @@ import {
   Bell,
   Gift,
   CheckCircle2,
+  Settings,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,25 +24,27 @@ import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { AdminBikes } from "@/components/admin/AdminBikes";
 import { AdminBookings } from "@/components/admin/AdminBookings";
 import { AdminUsers } from "@/components/admin/AdminUsers";
-import { AdminRewards } from "@/components/admin/AdminRewards";
-import { AdminApprovals } from "@/components/admin/AdminApprovals";
+import { AdminMemberships } from "@/components/admin/AdminMemberships";
+import { AdminSettings } from "@/components/admin/AdminSettings";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Panel — CampusRide" }] }),
   component: AdminPage,
 });
 
-type Section = "dashboard" | "bikes" | "bookings" | "users" | "rewards" | "approvals";
+type Section = "dashboard" | "inventory" | "bike_management" | "rentals" | "users" | "memberships" | "settings";
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode; badge?: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
-  { id: "approvals", label: "Approvals", icon: <CheckCircle2 className="h-4 w-4" /> },
-  { id: "bikes", label: "Bike Inventory", icon: <BikeIcon className="h-4 w-4" /> },
-  { id: "bookings", label: "User Bookings", icon: <ReceiptText className="h-4 w-4" /> },
-  { id: "users", label: "Customers", icon: <Users className="h-4 w-4" /> },
-  { id: "rewards", label: "Coupons & Rewards", icon: <Gift className="h-4 w-4" /> },
+  { id: "inventory", label: "Inventory", icon: <BikeIcon className="h-4 w-4" /> },
+  { id: "bike_management", label: "Bike Management", icon: <Shield className="h-4 w-4" /> },
+  { id: "rentals", label: "Rental Requests", icon: <ReceiptText className="h-4 w-4" /> },
+  { id: "users", label: "Users", icon: <Users className="h-4 w-4" /> },
+  { id: "memberships", label: "Memberships", icon: <Crown className="h-4 w-4" /> },
+  { id: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
 ];
 
 function AdminPage() {
@@ -53,20 +57,14 @@ function AdminPage() {
   const fetchPendingCount = useCallback(async () => {
     if (!token) return;
     try {
-      const [mRes, bRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/api/membership/admin/requests`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${import.meta.env.VITE_API_URL}/api/admin/bookings?status=pending`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-      const mData = await mRes.json();
-      const bData = await bRes.json();
-      const count =
-        (mData.data?.length || 0) +
-        (bData.data?.filter((b: any) => b.status === "pending").length || 0);
-      setPendingCount(count);
+      const { count: bCount, error: bError } = await supabase
+        .from('rentals')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['Pending', 'pending']);
+        
+      if (!bError) {
+        setPendingCount(bCount || 0);
+      }
     } catch (err) {
       console.error("Count sync failed", err);
     }
@@ -79,7 +77,7 @@ function AdminPage() {
   }, [fetchPendingCount]);
 
   const navItems = NAV_ITEMS.map((item) => {
-    if (item.id === "approvals") {
+    if (item.id === "rentals") {
       return { ...item, badge: pendingCount > 0 ? pendingCount.toString() : undefined };
     }
     return item;
@@ -91,7 +89,7 @@ function AdminPage() {
         navigate({ to: "/login" });
         return;
       }
-      if (user?.role !== "admin") {
+      if (user?.role !== "admin" && user?.role !== "super_admin") {
         toast.error("Access denied. Admins only.");
         navigate({ to: "/dashboard" });
       }
@@ -108,7 +106,7 @@ function AdminPage() {
       </div>
     );
 
-  if (!token || user?.role !== "admin") return null;
+  if (!token || (user?.role !== "admin" && user?.role !== "super_admin")) return null;
 
   const handleLogout = () => {
     logout();
@@ -242,7 +240,7 @@ function AdminPage() {
                 variant="secondary"
                 className="text-[10px] uppercase tracking-widest px-1.5 py-0"
               >
-                admin
+                {user?.role}
               </Badge>
             </div>
             <Button
@@ -260,11 +258,12 @@ function AdminPage() {
         {/* Page Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto">
           {section === "dashboard" && <AdminDashboard />}
-          {section === "bikes" && <AdminBikes />}
-          {section === "bookings" && <AdminBookings onCountChange={fetchPendingCount} />}
+          {section === "inventory" && <AdminBikes readOnly={true} />}
+          {section === "bike_management" && <AdminBikes />}
+          {section === "rentals" && <AdminBookings onCountChange={fetchPendingCount} />}
           {section === "users" && <AdminUsers />}
-          {section === "rewards" && <AdminRewards />}
-          {section === "approvals" && <AdminApprovals onCountChange={fetchPendingCount} />}
+          {section === "memberships" && <AdminMemberships />}
+          {section === "settings" && <AdminSettings />}
         </main>
       </div>
     </div>

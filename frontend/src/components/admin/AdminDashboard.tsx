@@ -25,8 +25,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
-
-const API_URL = import.meta.env.VITE_API_URL;
+import { supabase } from "@/lib/supabase";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-500/10 text-amber-500 border-amber-500/20",
@@ -42,17 +41,87 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/admin/stats`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success) setData(d.data);
-        else toast.error("Failed to load stats");
-      })
-      .catch(() => toast.error("Failed to load dashboard"))
-      .finally(() => setLoading(false));
-  }, [token]);
+    async function loadStats() {
+      try {
+        const [
+          { data: bookingsData },
+          { count: totalBikes },
+          { count: availableBikes },
+          { count: totalUsers },
+          { data: recentBookingsData },
+        ] = await Promise.all([
+          supabase.from('rentals').select('status, total_price, created_at'),
+          supabase.from('bikes').select('*', { count: 'exact', head: true }),
+          supabase.from('bikes').select('*', { count: 'exact', head: true }).eq('status', 'available'),
+          supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          supabase.from('rentals').select('*, bikes(*)').order('created_at', { ascending: false }).limit(10),
+        ]);
+
+        const bookings = bookingsData || [];
+        const recentBookings = recentBookingsData || [];
+        
+        // Manual join for recentBookings profiles
+        const userIds = [...new Set(recentBookings.map((r: any) => r.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('*').in('id', userIds);
+          if (profiles) {
+            const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]));
+            recentBookings.forEach((r: any) => {
+              if (r.user_id && profileMap[r.user_id]) {
+                r.profiles = profileMap[r.user_id];
+              }
+            });
+          }
+        }
+        
+        let totalRevenue = 0;
+        let monthlyRevenue = 0;
+        let pendingBookings = 0;
+        let confirmedBookings = 0;
+        let completedBookings = 0;
+        let rejectedBookings = 0;
+        
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        bookings.forEach(b => {
+          const statusLower = b.status?.toLowerCase();
+          if (statusLower === 'completed' || statusLower === 'confirmed' || statusLower === 'approved' || statusLower === 'active') {
+            totalRevenue += (Number(b.total_price) || 0);
+            if (new Date(b.created_at) >= startOfMonth) {
+              monthlyRevenue += (Number(b.total_price) || 0);
+            }
+          }
+          if (statusLower === 'pending') pendingBookings++;
+          else if (statusLower === 'confirmed' || statusLower === 'approved' || statusLower === 'active') confirmedBookings++;
+          else if (statusLower === 'completed') completedBookings++;
+          else if (statusLower === 'rejected' || statusLower === 'cancelled') rejectedBookings++;
+        });
+
+        setData({
+          stats: {
+            totalRevenue,
+            monthlyRevenue,
+            totalBikes: totalBikes || 0,
+            availableBikes: availableBikes || 0,
+            totalBookings: bookings.length,
+            pendingBookings,
+            confirmedBookings,
+            completedBookings,
+            rejectedBookings,
+            totalUsers: totalUsers || 0,
+          },
+          recentBookings: recentBookings || []
+        });
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load stats");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadStats();
+  }, []);
 
   if (loading)
     return (
@@ -207,23 +276,23 @@ export function AdminDashboard() {
               ) : (
                 recentBookings.map((b: any) => (
                   <TableRow
-                    key={b._id}
+                    key={b.id}
                     className="border-border/40 hover:bg-muted/10 transition-all duration-200 cursor-default"
                   >
                     <TableCell className="px-6 py-4">
                       <div className="font-black text-sm">
-                        {b.riderDetails?.name || b.user?.name}
+                        {b.profiles?.full_name || b.profiles?.email?.split('@')[0] || 'User'}
                       </div>
-                      <div className="text-[10px] font-bold text-muted-foreground">{b.user?.email}</div>
+                      <div className="text-[10px] font-bold text-muted-foreground">{b.profiles?.email}</div>
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <div className="text-sm font-semibold">
-                        {b.bike?.name || `${b.bike?.brand} ${b.bike?.model}`}
+                        {b.bikes?.bike_name || `${b.bikes?.brand || ''} ${b.bikes?.model || ''}`}
                       </div>
-                      <div className="text-[10px] font-bold text-primary uppercase tracking-wider">{b.bike?.category}</div>
+                      <div className="text-[10px] font-bold text-primary uppercase tracking-wider">{b.bikes?.category || 'Fleet'}</div>
                     </TableCell>
                     <TableCell className="px-6 py-4 text-xs font-bold text-muted-foreground">
-                      {new Date(b.createdAt).toLocaleDateString("en-IN", {
+                      {new Date(b.created_at).toLocaleDateString("en-IN", {
                         day: "2-digit",
                         month: "short",
                         year: "numeric",
@@ -231,12 +300,12 @@ export function AdminDashboard() {
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <span className="font-black text-sm">
-                        ₹{b.pricing?.totalAmount?.toLocaleString("en-IN")}
+                        ₹{b.total_price?.toLocaleString("en-IN")}
                       </span>
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       <Badge
-                        className={cn("capitalize text-[9px] font-black uppercase tracking-widest border rounded-lg px-2 py-0.5", STATUS_COLORS[b.status] || "")}
+                        className={cn("capitalize text-[9px] font-black uppercase tracking-widest border rounded-lg px-2 py-0.5", STATUS_COLORS[b.status?.toLowerCase()] || "")}
                       >
                         {b.status}
                       </Badge>

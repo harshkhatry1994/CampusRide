@@ -24,6 +24,8 @@ import html2canvas from "html2canvas";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { BrandLogo } from "@/components/BrandLogo";
+import { supabase } from "@/lib/supabase";
+import { formatISTDate, formatISTDateShort, durationDays as calcDurationDays } from "@/lib/dateUtils";
 
 export const Route = createFileRoute("/invoice/$bookingId")({
   component: InvoicePage,
@@ -38,16 +40,26 @@ function InvoicePage() {
   const [isEmailing, setIsEmailing] = useState(false);
 
   useEffect(() => {
+    if (!bookingId || bookingId === 'undefined') {
+      setLoading(false);
+      return;
+    }
     const fetchBooking = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bookings/${bookingId}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        const data = await res.json();
-        if (data.success) {
-          setBooking(data.data);
+        const { data, error } = await supabase
+          .from('rentals')
+          .select('*, bikes!bike_id(id, bike_name, brand, model, category, image_url, daily_rate)')
+          .eq('id', bookingId)
+          .maybeSingle();
+        if (data && !error) {
+          if (data.user_id) {
+            const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user_id).single();
+            if (profile) data.profiles = profile;
+          }
+          setBooking(data);
         } else {
-          toast.error(data.message || "Permission denied");
+          console.error('Invoice fetch error:', error?.message);
+          toast.error(error?.message || "Booking not found");
         }
       } catch (err) {
         console.error("Failed to load booking for invoice", err);
@@ -85,7 +97,7 @@ function InvoicePage() {
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      const fileName = `CampusRide_Invoice_${booking.bookingId || booking._id.slice(-6).toUpperCase()}.pdf`;
+      const fileName = `CampusRide_Invoice_${booking.id?.split('-')[0].toUpperCase()}.pdf`;
       pdf.save(fileName);
 
       toast.success("Invoice downloaded successfully", { id: toastId });
@@ -148,7 +160,7 @@ function InvoicePage() {
       </div>
     );
 
-  const isRestricted = ["cancelled", "rejected", "failed"].includes(booking.status);
+  const isRestricted = ["cancelled", "rejected", "failed"].includes(booking.status?.toLowerCase());
   if (isRestricted)
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -172,17 +184,30 @@ function InvoicePage() {
       </div>
     );
 
-  const invoiceNumber = `INV-${booking.bookingId || booking._id.slice(-6).toUpperCase()}`;
+  const invoiceNumber = `INV-${booking.id?.split('-')[0].toUpperCase()}`;
   const invoiceDate = new Date().toLocaleDateString("en-IN", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
-  const durationDays =
-    Math.ceil(
-      (new Date(booking.endDate).getTime() - new Date(booking.startDate).getTime()) /
-        (1000 * 60 * 60 * 24),
-    ) || 1;
+  const durationDays = calcDurationDays(
+    booking.start_date || booking.startDate,
+    booking.end_date   || booking.endDate
+  );
+    
+  // Reconstruct Pricing for Supabase
+  const securityDeposit = 1000; // bikes table has no security_deposit column
+  const totalAmount = booking.total_price || booking.pricing?.totalAmount || 0;
+  const basePlusGst = Math.max(0, totalAmount - securityDeposit - 49);
+  const pricing = booking.pricing || {
+    basePrice: Math.round(basePlusGst / 1.18),
+    securityDeposit: securityDeposit,
+    gst: Math.round(basePlusGst - basePlusGst / 1.18),
+    platformFee: 49,
+    totalAmount: totalAmount,
+  };
+  const bike = booking.bikes || booking.bike || {};
+  const userDetails = booking.profiles || booking.riderDetails || booking.user || {};
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8 font-sans selection:bg-indigo-100 print:bg-white print:p-0">
@@ -253,12 +278,12 @@ function InvoicePage() {
             <Badge
               className={cn(
                 "px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest mb-4",
-                booking.payment?.status === "paid"
+                booking.payments?.[0]?.status === "Completed" || booking.status !== "Pending"
                   ? "bg-emerald-500 text-white shadow-lg shadow-emerald-100"
                   : "bg-amber-500 text-white shadow-lg shadow-amber-100",
               )}
             >
-              {booking.payment?.status === "paid" ? "• PAYMENT RECEIVED •" : "• PAYMENT PENDING •"}
+              {booking.payments?.[0]?.status === "Completed" || booking.status !== "Pending" ? "• PAYMENT RECEIVED •" : "• PAYMENT PENDING •"}
             </Badge>
             <div className="space-y-1">
               <p className="text-3xl font-black text-slate-900 tracking-tighter">{invoiceNumber}</p>
@@ -279,16 +304,16 @@ function InvoicePage() {
               </h3>
               <div className="space-y-1">
                 <p className="text-xl font-black text-slate-900 leading-none">
-                  {booking.riderDetails?.name || booking.user?.name}
+                  {userDetails.name}
                 </p>
-                <p className="text-slate-500 font-bold text-sm">{booking.user?.email}</p>
-                <p className="text-slate-500 font-bold text-sm">{booking.riderDetails?.phone}</p>
+                <p className="text-slate-500 font-bold text-sm">{userDetails.email}</p>
+                <p className="text-slate-500 font-bold text-sm">{userDetails.phone || "N/A"}</p>
                 <div className="pt-3">
                   <p className="text-[10px] font-black text-slate-300 uppercase tracking-wider mb-1">
                     Billing Address
                   </p>
                   <p className="text-slate-500 text-sm font-medium leading-relaxed italic">
-                    {booking.riderDetails?.address || "Universal Campus Residence, Zone 4"}
+                    {userDetails.address || "Universal Campus Residence, Zone 4"}
                   </p>
                 </div>
               </div>
@@ -307,7 +332,7 @@ function InvoicePage() {
                     <p className="text-[10px] font-black text-slate-300 uppercase leading-none mb-1">
                       Ride ID
                     </p>
-                    <p className="text-sm font-black text-slate-800">#{booking.bookingId}</p>
+                    <p className="text-sm font-black text-slate-800">#{booking.id?.split('-')[0].toUpperCase()}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -319,7 +344,7 @@ function InvoicePage() {
                       Payment Method
                     </p>
                     <p className="text-sm font-black text-slate-800">
-                      {booking.payment?.method || "UPI Transfer"}
+                      {booking.payments?.[0]?.method || "UPI Transfer"}
                     </p>
                   </div>
                 </div>
@@ -370,20 +395,20 @@ function InvoicePage() {
                       <div className="h-20 w-24 bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm flex-shrink-0">
                         <img
                           src={
-                            booking.bike?.imageUrl?.startsWith("/uploads")
-                              ? `${import.meta.env.VITE_API_URL}${booking.bike?.imageUrl}`
-                              : booking.bike?.imageUrl || "/placeholder-bike.jpg"
+                            bike.image_url?.startsWith("/uploads")
+                              ? `${import.meta.env.VITE_API_URL}${bike.image_url}`
+                              : bike.image_url || bike.imageUrl || "/placeholder-bike.jpg"
                           }
                           className="w-full h-full object-cover"
                         />
                       </div>
                       <div>
                         <p className="text-xl font-black text-slate-900 leading-tight">
-                          {booking.bike?.brand} {booking.bike?.model}
+                          {bike.brand} {bike.model}
                         </p>
                         <p className="text-indigo-600 font-bold text-xs uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
                           <BikeIcon className="h-3 w-3" />{" "}
-                          {booking.bike?.category || "Premium Segment"}
+                          {bike.category || "Premium Segment"}
                         </p>
                         <div className="mt-3 flex items-center gap-4">
                           <div className="flex items-center gap-1.5">
@@ -405,11 +430,11 @@ function InvoicePage() {
                   <td className="px-8 py-8 text-center">
                     <div className="inline-flex flex-col items-center p-3 rounded-2xl bg-white border border-slate-100 shadow-sm">
                       <span className="text-xs font-black text-slate-800">
-                        {new Date(booking.startDate).toLocaleDateString()}
+                        {formatISTDateShort(booking.start_date || booking.startDate)}
                       </span>
                       <div className="h-px w-6 bg-indigo-100 my-1" />
                       <span className="text-xs font-black text-slate-800">
-                        {new Date(booking.endDate).toLocaleDateString()}
+                        {formatISTDateShort(booking.end_date || booking.endDate)}
                       </span>
                       <span className="text-[9px] font-black text-indigo-500 uppercase mt-1">
                         {durationDays} Days
@@ -418,7 +443,7 @@ function InvoicePage() {
                   </td>
                   <td className="px-8 py-8 text-right">
                     <p className="text-xl font-black text-slate-900">
-                      ₹{booking.pricing?.basePrice?.toLocaleString("en-IN") || 0}
+                      ₹{pricing.basePrice.toLocaleString("en-IN")}
                     </p>
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
                       Base Rental Fare
@@ -456,7 +481,7 @@ function InvoicePage() {
                     <div className="h-full w-full rounded-full bg-indigo-50 flex items-center justify-center p-1 relative overflow-hidden">
                       <BrandLogo size="sm" className="opacity-10 scale-150 absolute rotate-12" />
                       <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=VERIFY:${booking.bookingId}`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=VERIFY:${booking.id}`}
                         className="relative z-10 mix-blend-multiply opacity-60 grayscale"
                       />
                     </div>
@@ -499,25 +524,25 @@ function InvoicePage() {
                   <div className="flex justify-between items-center text-sm font-bold text-slate-400">
                     <span>Base Fare ({durationDays}d)</span>
                     <span className="text-white">
-                      ₹{booking.pricing?.basePrice?.toLocaleString("en-IN")}
+                      ₹{pricing.basePrice.toLocaleString("en-IN")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-bold text-slate-400">
                     <span>Security Deposit</span>
                     <span className="text-white">
-                      ₹{booking.pricing?.securityDeposit?.toLocaleString("en-IN")}
+                      ₹{pricing.securityDeposit.toLocaleString("en-IN")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-bold text-slate-400">
                     <span>Platform Fee</span>
                     <span className="text-white">
-                      ₹{booking.pricing?.platformFee?.toLocaleString("en-IN")}
+                      ₹{pricing.platformFee.toLocaleString("en-IN")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-bold text-slate-400 pb-8 border-b border-white/10">
                     <span>GST / Taxes (18%)</span>
                     <span className="text-white">
-                      ₹{booking.pricing?.gst?.toLocaleString("en-IN")}
+                      ₹{pricing.gst.toLocaleString("en-IN")}
                     </span>
                   </div>
 
@@ -528,12 +553,12 @@ function InvoicePage() {
                           Total Amount Paid
                         </p>
                         <p className="text-5xl font-black tracking-tighter">
-                          ₹{booking.pricing?.totalAmount?.toLocaleString("en-IN")}
+                          ₹{pricing.totalAmount.toLocaleString("en-IN")}
                         </p>
                       </div>
                       <div className="h-20 w-20 bg-white p-2 rounded-2xl shadow-xl flex items-center justify-center">
                         <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=CampusRide:${booking.bookingId}:TOTAL:${booking.pricing.totalAmount}`}
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=CampusRide:${booking.id}:TOTAL:${pricing.totalAmount}`}
                           className="w-full h-full grayscale"
                         />
                       </div>

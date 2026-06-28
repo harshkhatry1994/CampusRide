@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/bikes/$bikeId")({
   head: () => ({ meta: [{ title: "Motorcycle Details — CampusRide" }] }),
@@ -32,7 +33,6 @@ const localImages = import.meta.glob("/src/assets/bike-*.jpg", {
 
 function resolveImage(url: string) {
   if (url?.startsWith("/src/assets/")) return localImages[url] ?? url;
-  if (url?.startsWith("/uploads/")) return `${import.meta.env.VITE_API_URL}${url}`;
   return url;
 }
 
@@ -44,20 +44,17 @@ function BikeDetails() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/bikes/${bikeId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setBike(data.data);
-        } else {
-          setBike(null);
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setLoading(false);
-      });
+    async function fetchBike() {
+      const { data, error } = await supabase.from('bikes').select('*').eq('id', bikeId).single();
+      if (error) {
+        console.error("Failed to fetch bike details:", error);
+        setBike(null);
+      } else if (data) {
+        setBike(data);
+      }
+      setLoading(false);
+    }
+    fetchBike();
   }, [bikeId]);
 
   if (loading)
@@ -110,8 +107,8 @@ function BikeDetails() {
         <div className="space-y-6">
           <div className="relative rounded-[2.5rem] overflow-hidden bg-gradient-card border border-border/60 shadow-elegant group">
             <img
-              src={resolveImage(bike.imageUrl)}
-              alt={bike.name}
+              src={resolveImage(bike.image_url)}
+              alt={bike.bike_name}
               className="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-1000"
             />
             <div className="absolute top-6 left-6 flex gap-2">
@@ -142,16 +139,16 @@ function BikeDetails() {
               label="Mileage"
               value={`${bike.mileage} kmpl`}
             />
-            <SpecCard icon={<Fuel className="h-4 w-4" />} label="Fuel" value={bike.fuelType} />
+            <SpecCard icon={<Fuel className="h-4 w-4" />} label="Fuel" value={bike.fuel_type} />
             <SpecCard
               icon={<Zap className="h-4 w-4" />}
               label="Engine"
-              value={`${bike.engineCC}cc`}
+              value={`${bike.engine_cc}cc`}
             />
             <SpecCard
               icon={<Star className="h-4 w-4 text-primary fill-primary" />}
               label="Rating"
-              value={bike.rating}
+              value={bike.rating || 4.8}
             />
           </div>
         </div>
@@ -162,13 +159,13 @@ function BikeDetails() {
             <div className="flex items-center gap-3 text-primary font-bold uppercase tracking-widest text-[10px] mb-2">
               <Sparkles className="h-3 w-3" /> Premium Fleet
             </div>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">{bike.name}</h1>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">{bike.bike_name}</h1>
             <div className="flex items-center gap-4 text-muted-foreground font-semibold">
               <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg text-sm">
                 {bike.brand} {bike.model}
               </span>
               <span className="flex items-center gap-1.5 text-sm">
-                <MapPin className="h-4 w-4 text-primary" /> {bike.pickupLocation || "Campus Hub"}
+                <MapPin className="h-4 w-4 text-primary" /> {bike.pickup_location || "Campus Hub"}
               </span>
             </div>
           </div>
@@ -187,7 +184,7 @@ function BikeDetails() {
                 <p className="text-[10px] font-bold text-muted-foreground uppercase">
                   Security Deposit
                 </p>
-                <p className="font-bold">₹{bike.securityDeposit || 1000} (Refundable)</p>
+                <p className="font-bold">₹{bike.security_deposit || 1000} (Refundable)</p>
               </div>
             </div>
             <div className="p-4 rounded-2xl bg-gradient-card border border-border/40 flex items-center gap-4">
@@ -197,7 +194,7 @@ function BikeDetails() {
               <div>
                 <p className="text-[10px] font-bold text-muted-foreground uppercase">Helmet Info</p>
                 <p className="font-bold">
-                  {bike.helmetIncluded ? "Included in Plan" : "Available on Request"}
+                  {bike.helmet_included !== false ? "Included in Plan" : "Available on Request"}
                 </p>
               </div>
             </div>
@@ -211,31 +208,31 @@ function BikeDetails() {
                 </p>
                 <div className="flex items-baseline gap-1">
                   <span className="text-4xl font-extrabold text-gradient-brand">
-                    ₹{Number(bike.pricePerDay).toLocaleString("en-IN")}
+                    ₹{Number(bike.daily_rate).toLocaleString("en-IN")}
                   </span>
                   <span className="text-muted-foreground font-medium">/day</span>
                 </div>
               </div>
               <Badge
                 className={
-                  bike.available ? "bg-green-500/10 text-green-500 border-green-500/20" : ""
+                  bike.status === 'available' ? "bg-green-500/10 text-green-500 border-green-500/20" : ""
                 }
-                variant={bike.available ? "outline" : "destructive"}
+                variant={bike.status === 'available' ? "outline" : "destructive"}
               >
                 <div
-                  className={`h-1.5 w-1.5 rounded-full mr-2 ${bike.available ? "bg-green-500 animate-pulse" : "bg-destructive"}`}
+                  className={`h-1.5 w-1.5 rounded-full mr-2 ${bike.status === 'available' ? "bg-green-500 animate-pulse" : "bg-destructive"}`}
                 />
-                {bike.available ? "Available Now" : "Currently Booked"}
+                {bike.status === 'available' ? "Available Now" : "Currently Booked"}
               </Badge>
             </div>
 
             <Button
               asChild
-              disabled={!bike.available}
+              disabled={bike.status !== 'available'}
               size="lg"
               className="w-full h-16 rounded-2xl bg-gradient-brand text-primary-foreground text-lg font-bold shadow-glow hover:opacity-90 transform hover:scale-[1.01] transition-all"
             >
-              <Link to="/booking/$bikeId" params={{ bikeId: bike._id }}>
+              <Link to="/booking/$bikeId" params={{ bikeId: bike.id }}>
                 <Zap className="h-5 w-5 mr-2" /> Book This Ride Now
               </Link>
             </Button>

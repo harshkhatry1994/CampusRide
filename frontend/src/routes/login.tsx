@@ -8,12 +8,11 @@ import { Eye, EyeOff, ArrowRight, ShieldCheck, Zap, Loader2 } from "lucide-react
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogo } from "@/components/BrandLogo";
-
+import { supabase } from "@/lib/supabase";
 export const Route = createFileRoute("/login")({
-  validateSearch: (search: Record<string, unknown>): { token?: string; user?: string } => {
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
     return {
-      token: (search.token as string) || undefined,
-      user: (search.user as string) || undefined,
+      redirect: (search.redirect as string) || undefined,
     };
   },
   head: () => ({ meta: [{ title: "Sign in — CampusRide" }] }),
@@ -22,7 +21,6 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const search = useSearch({ from: "/login" }) as any;
   const { login, token } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,36 +33,25 @@ function LoginPage() {
       navigate({ to: "/dashboard" });
       return;
     }
-
-    if (search.token && search.user) {
-      try {
-        const userData = JSON.parse(decodeURIComponent(search.user));
-        login(userData, search.token);
-        toast.success("Welcome to CampusRide!");
-        navigate({ to: "/dashboard" });
-      } catch (err) {
-        toast.error("Authentication failed");
-      }
-    }
-  }, [search, navigate, login, token]);
+  }, [navigate, token]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        toast.error(data.message || "Login failed");
+
+      if (error) {
+        toast.error(error.message || "Login failed");
         setLoading(false);
         return;
       }
-      login(data.user, data.token);
-      toast.success(`Welcome back, ${data.user.name}!`);
+      
+      // The auth listener in AuthContext will handle fetching user data and redirecting.
+      toast.success("Welcome back!");
       navigate({ to: "/dashboard" });
     } catch (err) {
       toast.error("Network error");
@@ -72,9 +59,31 @@ function LoginPage() {
     }
   }
 
-  function handleGoogle() {
+  async function handleGoogle() {
     setGoogleLoading(true);
-    window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        }
+      });
+      
+      if (error) {
+        toast.error(error.message || "Google Authentication failed");
+        setGoogleLoading(false);
+        return;
+      }
+      // Browser will redirect to Google — no further action needed
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Google Authentication failed");
+      setGoogleLoading(false);
+    }
   }
 
   return (

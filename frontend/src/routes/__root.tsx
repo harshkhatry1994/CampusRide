@@ -61,20 +61,34 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 import { ThemeProvider } from "@/context/ThemeContext";
+import { useRouterState } from "@tanstack/react-router";
+
+// Routes that use their own full-screen layout (no Navbar/Footer)
+const PORTAL_ROUTES = ["/admin-portal", "/admin"];
 
 function RootComponent() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isPortal = PORTAL_ROUTES.some((r) => pathname.startsWith(r));
+
   return (
     <ThemeProvider>
       <AuthProvider>
-        <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-300">
-          <Navbar />
-          <main className="flex-1">
+        {isPortal ? (
+          <>
             <Outlet />
-          </main>
-          <Footer />
-          <ChatBot />
-          <Toaster richColors position="top-right" duration={2000} />
-        </div>
+            <Toaster richColors position="top-right" duration={2000} />
+          </>
+        ) : (
+          <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-300">
+            <Navbar />
+            <main className="flex-1">
+              <Outlet />
+            </main>
+            <Footer />
+            <ChatBot />
+            <Toaster richColors position="top-right" duration={2000} />
+          </div>
+        )}
       </AuthProvider>
     </ThemeProvider>
   );

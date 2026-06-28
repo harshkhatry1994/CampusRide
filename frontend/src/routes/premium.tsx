@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   CheckCircle2,
   Crown,
@@ -8,6 +10,8 @@ import {
   Sparkles,
   Star,
   UserCheck,
+  CalendarDays,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -19,7 +23,47 @@ export const Route = createFileRoute("/premium")({
 });
 
 function PremiumLandingPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const [membership, setMembership] = useState<any>(null);
+
+  useEffect(() => {
+    if (user?.is_premium && user?.id) {
+      const fetchMembership = async () => {
+        const { data } = await supabase
+          .from("membership_requests")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("status", "approved")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .single();
+        if (data) {
+          setMembership(data);
+        }
+      };
+      fetchMembership();
+    }
+  }, [user]);
+
+  const getMembershipDetails = () => {
+    if (!membership) return null;
+    const startDate = new Date(membership.updated_at || membership.created_at);
+    const expiryDate = new Date(startDate);
+    expiryDate.setFullYear(startDate.getFullYear() + 1);
+    
+    const today = new Date();
+    const diffTime = expiryDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return { 
+      startDate: startDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }), 
+      expiryDate: expiryDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }), 
+      remainingDays: Math.max(0, diffDays) 
+    };
+  };
+
+  const details = getMembershipDetails();
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden transition-colors duration-300">
       {/* Background Decor */}
@@ -75,7 +119,7 @@ function PremiumLandingPage() {
 
           {/* Right: Pricing Card / Admin Status */}
           <div className="relative">
-            {user?.role === "admin" ? (
+            {isAdmin ? (
               <div className="relative p-8 sm:p-10 rounded-[2.5rem] bg-card border border-border/60 shadow-2xl flex flex-col items-center text-center overflow-hidden min-h-[500px] justify-center transition-colors">
                 <div className="absolute top-0 right-0 p-4">
                   <Badge className="bg-amber-500 text-black font-black px-4 py-1 rounded-full text-xs">
@@ -109,6 +153,59 @@ function PremiumLandingPage() {
                   </Link>
                 </div>
               </div>
+            ) : user?.is_premium ? (
+              <>
+                <div className="absolute -inset-1 bg-gradient-premium-gold rounded-[3rem] blur-xl opacity-30 animate-pulse" />
+                <div className="relative p-8 sm:p-10 rounded-[2.5rem] bg-card border border-amber-500/20 shadow-elegant flex flex-col h-full overflow-hidden transition-colors">
+                  <Sparkles className="absolute -top-6 -right-6 h-32 w-32 text-amber-500/10" />
+
+                  <div className="text-center space-y-4 mb-8">
+                    <div className="h-20 w-20 mx-auto rounded-full bg-gradient-premium-gold p-1 shadow-glow mb-4">
+                      <div className="h-full w-full rounded-full bg-background flex items-center justify-center">
+                        <Crown className="h-10 w-10 text-amber-500" />
+                      </div>
+                    </div>
+                    <Badge className="bg-amber-500 text-black font-black px-4 py-1 rounded-full text-xs">
+                      PREMIUM ACTIVE
+                    </Badge>
+                    <h2 className="text-3xl font-black text-foreground">Welcome back, VIP!</h2>
+                    <p className="text-sm text-muted-foreground font-medium">
+                      Your exclusive benefits are currently active.
+                    </p>
+                  </div>
+
+                  {details ? (
+                    <div className="space-y-6 mb-10 flex-1">
+                      <div className="p-5 rounded-2xl bg-muted/30 border border-border/40 space-y-4">
+                        <div className="flex items-center gap-3">
+                          <CalendarDays className="h-5 w-5 text-amber-500" />
+                          <div>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Valid Until</p>
+                            <p className="font-bold text-foreground">{details.expiryDate}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Clock className="h-5 w-5 text-amber-500" />
+                          <div>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Remaining Days</p>
+                            <p className="font-bold text-foreground">{details.remainingDays} Days</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6 mb-10 flex-1 flex items-center justify-center">
+                      <p className="text-muted-foreground font-medium text-center">Loading membership details...</p>
+                    </div>
+                  )}
+
+                  <Link to="/bikes">
+                    <Button className="w-full h-14 rounded-2xl bg-foreground text-background hover:bg-foreground/90 transition-all font-extrabold text-lg shadow-elegant">
+                      Book a Ride Now
+                    </Button>
+                  </Link>
+                </div>
+              </>
             ) : (
               <>
                 <div className="absolute -inset-1 bg-gradient-premium-gold rounded-[3rem] blur-xl opacity-30 animate-pulse" />
