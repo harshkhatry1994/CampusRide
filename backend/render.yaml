@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: campusride-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: FRONTEND_URL
+        value: https://campus-ride-frontend.vercel.app # Example URL, update with actual Vercel URL
+      - key: NODE_ENV
+        value: production
