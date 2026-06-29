@@ -1,5 +1,5 @@
-import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-import appCss from "../styles.css?url";
+import { Outlet, createRootRoute } from "@tanstack/react-router";
+import "../styles.css";
 import { Toaster } from "@/components/ui/sonner";
 import { Navbar } from "@/components/site/Navbar";
 import { Footer } from "@/components/site/Footer";
@@ -24,41 +24,9 @@ function NotFoundComponent() {
 }
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "CampusRide 🚲 — Premium motorcycle rentals" },
-      {
-        name: "description",
-        content:
-          "Rent KTM, TVS Apache, Royal Enfield and more. CampusRide makes premium motorcycle rentals effortless.",
-      },
-      { property: "og:title", content: "CampusRide 🚲 — Premium motorcycle rentals" },
-      { property: "og:description", content: "Rent premium motorcycles in seconds." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-    links: [{ rel: "stylesheet", href: appCss }],
-  }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });
-
-function RootShell({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 import { ThemeProvider } from "@/context/ThemeContext";
 import { useRouterState } from "@tanstack/react-router";
