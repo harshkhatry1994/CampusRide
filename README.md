@@ -70,15 +70,7 @@ CampusRide/
 
 ---
 
-## 📸 Screenshots
 
-| Login Page | Home Dashboard |
-| :---: | :---: |
-| ![Login](./screenshots/login-page.png) | ![Home](./screenshots/dashboard.png) |
-
-| Admin Bookings | User Profile |
-| :---: | :---: |
-| ![Bookings](./screenshots/bookings.png) | ![Customers](./screenshots/customers.png) |
 
 ---
 
