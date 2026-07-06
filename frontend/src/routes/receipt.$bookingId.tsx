@@ -27,7 +27,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/lib/supabase";
 import { formatISTDate, formatISTDateShort, durationDays as calcDurationDays } from "@/lib/dateUtils";
 
-export const Route = createFileRoute("/invoice/$bookingId")({
+export const Route = createFileRoute("/receipt/$bookingId")({
   component: InvoicePage,
 });
 

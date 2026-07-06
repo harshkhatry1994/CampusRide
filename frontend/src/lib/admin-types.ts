@@ -132,7 +132,7 @@ export interface DealerInvoice {
   sale_id: string | null;
   bike_id: string | null;
   customer_id: string | null;
-  pdf_url: string | null;
+  invoice_url: string | null;
   issued_date: string;
   status: 'draft' | 'issued' | 'paid' | 'cancelled';
   created_by: string | null;

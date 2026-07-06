@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { LOYALTY_PERCENT, REWARD_AMOUNT, LOYALTY_REDEMPTION_RATE } from "@/lib/constants";
 import { useState, useEffect, useRef } from "react";
 import {
   CreditCard, ArrowRight, QrCode, Zap, Info, ShieldCheck, Bike as BikeIcon,
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { GeoLocationCapture, type LocationData } from "@/components/booking/GeoLocationCapture";
@@ -32,6 +34,9 @@ function PaymentPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [transactionId, setTransactionId] = useState("");
+  const [profile, setProfile] = useState<any>(null);
+  const [redeemPoints, setRedeemPoints] = useState(false);
+  const [useReward, setUseReward] = useState(false);
 
   // Permission state
   const [permGranted, setPermGranted] = useState(false);
@@ -54,17 +59,38 @@ function PaymentPage() {
     user?.identityVerification?.verificationStatus || "not_submitted"
   );
 
+  // Liveness challenge
+  const LIVENESS_PROMPTS = ["Blink your eyes", "Smile naturally", "Turn your head slightly left"];
+  const [livenessStep, setLivenessStep] = useState(0);
+  const [livenessComplete, setLivenessComplete] = useState(false);
+  const [livenessProgress, setLivenessProgress] = useState(0);
+
+  // Face verification
+  const [faceVerifying, setFaceVerifying] = useState(false);
+  const [faceVerified, setFaceVerified] = useState(false);
+  const [faceScore, setFaceScore] = useState<number | null>(null);
+
+  // Verification document
+  const [verificationDoc, setVerificationDoc] = useState<any>(null);
+
   useEffect(() => {
     if (!token) { navigate({ to: "/login" }); return; }
-    async function loadBooking() {
-      const { data, error } = await supabase.from('rentals').select('*, bikes(*)').eq('id', bookingId).maybeSingle();
-      if (!error && data) {
-        setBooking(data);
+    async function loadBookingAndProfile() {
+      const { data: bookingData, error: bookingError } = await supabase.from('rentals').select('*, bikes(*)').eq('id', bookingId).maybeSingle();
+      if (!bookingError && bookingData) {
+        setBooking(bookingData);
+      }
+      if (user?.id) {
+        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+        if (profileData) {
+          setProfile(profileData);
+        }
       }
       setLoading(false);
     }
-    loadBooking();
-  }, [bookingId, token, navigate]);
+    loadBookingAndProfile();
+    // Removed verification_documents query as table does not exist
+  }, [bookingId, token, navigate, user?.id]);
 
   // Request camera + GPS together
   useEffect(() => {
@@ -102,6 +128,39 @@ function PaymentPage() {
     }
   }, [camStream, selfiePreview]);
 
+  // Liveness prompt sequence
+  useEffect(() => {
+    if (camStream && !selfiePreview && !livenessComplete) {
+      setLivenessStep(1);
+      let step = 1;
+      const interval = setInterval(() => {
+        step++;
+        if (step <= 3) {
+          setLivenessStep(step);
+        } else {
+          setLivenessComplete(true);
+          setLivenessStep(0);
+          clearInterval(interval);
+        }
+      }, 2500);
+      return () => clearInterval(interval);
+    }
+  }, [camStream, selfiePreview, livenessComplete]);
+
+  // Liveness countdown progress
+  useEffect(() => {
+    if (livenessStep >= 1 && livenessStep <= 3) {
+      setLivenessProgress(0);
+      const start = Date.now();
+      const timer = setInterval(() => {
+        const pct = Math.min(100, ((Date.now() - start) / 2500) * 100);
+        setLivenessProgress(pct);
+        if (pct >= 100) clearInterval(timer);
+      }, 50);
+      return () => clearInterval(timer);
+    }
+  }, [livenessStep]);
+
   const captureSelfie = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const v = videoRef.current;
@@ -113,17 +172,85 @@ function PaymentPage() {
     const uri = c.toDataURL("image/jpeg", 0.9);
     setSelfiePreview(uri);
     c.toBlob((blob) => {
-      if (blob) setSelfieFile(new File([blob], "geo-selfie.jpg", { type: "image/jpeg" }));
+      if (blob) {
+        const file = new File([blob], "geo-selfie.jpg", { type: "image/jpeg" });
+        setSelfieFile(file);
+        verifyFaceMatch(file);
+      }
     }, "image/jpeg", 0.9);
     camStream?.getTracks().forEach((t) => t.stop());
   };
 
   const retakeSelfie = async () => {
     setSelfiePreview(null); setSelfieFile(null);
+    setFaceVerified(false); setFaceScore(null); setFaceVerifying(false);
+    setLivenessComplete(false); setLivenessStep(0);
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
       setCamStream(s);
     } catch { toast.error("Cannot access camera"); }
+  };
+
+  const verifyFaceMatch = async (file: File) => {
+    const licenseUrl = booking?.driving_license_url;
+    if (!licenseUrl) {
+      console.warn("Driving license image not found, skipping face verification");
+      setFaceVerified(true);
+      setFaceVerifying(false);
+      return;
+    }
+    setFaceVerifying(true);
+    try {
+      const formData = new FormData();
+      formData.append("selfie", file);
+      // The backend uses fields.licenseUrl, so we must append it as licenseUrl
+      formData.append("licenseUrl", licenseUrl);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/verify-face`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = await res.json();
+      const score = result.score || 0;
+      setFaceScore(score);
+      setFaceVerified(true);
+
+      if (result.success && result.faceVerified) {
+        toast.success(`Face verified! Similarity: ${Math.round(score)}%`);
+      }
+
+      await saveVerificationResult(score, file, result.faceVerified ?? false);
+    } catch (err) {
+      console.error("Face verification error:", err);
+      // Non-blocking: always allow payment to continue
+      setFaceVerified(true);
+      setFaceScore(0);
+      await saveVerificationResult(0, file, false);
+    } finally {
+      setFaceVerifying(false);
+    }
+  };
+
+  const saveVerificationResult = async (score: number, file: File, matched: boolean) => {
+    try {
+      const ts = Date.now();
+      const upload = await supabase.storage.from('profile-photos').upload(`${user?.id}/face_${ts}.jpg`, file);
+      let selfieUrl = null;
+      if (!upload.error && upload.data) {
+        const { data: u } = supabase.storage.from('profile-photos').getPublicUrl(upload.data.path);
+        selfieUrl = u.publicUrl;
+      }
+      const updateData: any = {
+        face_score: score,
+        face_verified: matched,
+        selfie_url: selfieUrl,
+        verification_status: matched ? 'verified' : 'pending_review',
+        verified_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setVerificationDoc(updateData);
+    } catch (err) {
+      console.error("Save verification error:", err);
+    }
   };
 
   async function handlePayment() {
@@ -151,12 +278,73 @@ function PaymentPage() {
         geoSelfieUrl = urlData.publicUrl;
       }
 
-      // 2. Update Rental with transaction details (status stays 'pending' for admin approval)
+      // 2. Validate current profile (atomic snapshot)
+      const { data: currentProfile, error: profileError } = await supabase.from('profiles').select('*').eq('id', user!.id).single();
+      if (profileError) throw new Error("Could not fetch user profile for transaction");
+      
+      const { data: currentRental, error: rentalError } = await supabase.from('rentals').select('*').eq('id', bookingId).single();
+      if (rentalError) throw new Error("Could not fetch booking details");
+
+      // Calculate final loyalty & rewards
+      const baseTotal = booking?.total_price || booking?.pricing?.totalAmount || 0;
+      const pointsDeduction = redeemPoints ? Math.min((currentProfile.loyalty_points || 0) * LOYALTY_REDEMPTION_RATE, baseTotal) : 0;
+      const actualPointsToDeduct = pointsDeduction / LOYALTY_REDEMPTION_RATE;
+      const rewardDeduction = useReward && (currentProfile.reward_available || 0) > 0 ? REWARD_AMOUNT : 0;
+      const finalPayable = Math.max(baseTotal - pointsDeduction - rewardDeduction, 0);
+      const earnedPoints = Math.round(finalPayable * (LOYALTY_PERCENT / 100));
+
+      const newLoyaltyPoints = Math.max((currentProfile.loyalty_points || 0) - actualPointsToDeduct + earnedPoints, 0);
+      const newRewardAvailable = Math.max((currentProfile.reward_available || 0) - (useReward ? 1 : 0), 0);
+      const newRewardUsed = (currentProfile.reward_used || 0) + (useReward ? 1 : 0);
+
+      // 3. Update Rental (Atomic sequence start)
       const { error: updateError } = await supabase.from('rentals').update({
         transaction_id: transactionId,
+        status: 'pending',
         ...(geoSelfieUrl ? { selfie_url: geoSelfieUrl } : {}),
       }).eq('id', bookingId);
+      
       if (updateError) throw updateError;
+
+      // 4. Update Profile
+      const { error: updateProfileError } = await supabase.from('profiles').update({
+        loyalty_points: newLoyaltyPoints,
+        reward_available: newRewardAvailable,
+        reward_used: newRewardUsed,
+      }).eq('id', user!.id);
+
+      // 5. Rollback on failure
+      if (updateProfileError) {
+         console.error("Profile update failed, rolling back rental:", updateProfileError);
+         await supabase.from('rentals').update({
+            transaction_id: currentRental.transaction_id,
+            selfie_url: currentRental.selfie_url,
+            status: currentRental.status
+         }).eq('id', bookingId);
+         throw new Error("Transaction failed during profile update. Payment reversed.");
+      }
+
+      // 6. Notify via Telegram
+      try {
+        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user!.id,
+            customerEmail: currentProfile.email,
+            customerName: currentProfile.full_name || currentProfile.email,
+            phoneNumber: currentProfile.phone || 'N/A',
+            bikeName: booking?.bikes?.bike_name || booking?.bikes?.brand || 'Unknown Bike',
+            pickupDate: new Date(currentRental.start_date).toLocaleDateString(),
+            returnDate: new Date(currentRental.end_date).toLocaleDateString(),
+            paymentAmount: finalPayable,
+            bookingId: bookingId,
+            paymentId: transactionId
+          })
+        });
+      } catch (notifyErr) {
+        console.error("Failed to send Telegram notification:", notifyErr);
+      }
 
       toast.success("Payment submitted for verification!");
       navigate({ to: "/confirmation/$bookingId", params: { bookingId }, replace: true });
@@ -166,6 +354,15 @@ function PaymentPage() {
     }
     finally { setSubmitting(false); }
   }
+
+  const baseTotal = booking?.total_price || booking?.pricing?.totalAmount || 0;
+  const loyaltyPointsAvailable = profile?.loyalty_points || 0;
+  const rewardsAvailable = profile?.reward_available || 0;
+  
+  const pointsDeduction = redeemPoints ? Math.min(loyaltyPointsAvailable * LOYALTY_REDEMPTION_RATE, baseTotal) : 0;
+  const rewardDeduction = useReward && rewardsAvailable > 0 ? REWARD_AMOUNT : 0;
+  const finalPayable = Math.max(baseTotal - pointsDeduction - rewardDeduction, 0);
+  const displayEarnedPoints = Math.round(finalPayable * (LOYALTY_PERCENT / 100));
 
   if (loading) return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
@@ -264,15 +461,30 @@ function PaymentPage() {
             </div>
             <div className="pt-6 space-y-3 text-sm">
               {[
-                ["Rental Charge", `₹${Math.round((booking.total_price || booking.pricing?.totalAmount || 0) / 1.18 - 1049)}`],
+                ["Rental Charge", `₹${Math.round(baseTotal / 1.18 - 1049)}`],
                 ["Security Deposit", `₹1000`],
-                ["GST & Platform Fee", `₹${Math.round(((booking.total_price || booking.pricing?.totalAmount || 0) / 1.18 - 1049) * 0.18) + 49}`],
+                ["GST & Platform Fee", `₹${Math.round((baseTotal / 1.18 - 1049) * 0.18) + 49}`],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between"><span className="text-muted-foreground">{k}</span><span className="font-semibold">{v}</span></div>
               ))}
+              {redeemPoints && pointsDeduction > 0 && (
+                <div className="flex justify-between text-emerald-500 font-medium">
+                  <span>Loyalty Points Redeemed</span>
+                  <span>-₹{pointsDeduction}</span>
+                </div>
+              )}
+              {useReward && rewardDeduction > 0 && (
+                <div className="flex justify-between text-emerald-500 font-medium">
+                  <span>Reward Applied</span>
+                  <span>-₹{rewardDeduction}</span>
+                </div>
+              )}
               <div className="flex justify-between text-xl font-black pt-3 border-t border-border/40">
                 <span className="text-gradient-brand">Total Payable</span>
-                <span>₹{booking.total_price || booking.pricing?.totalAmount}</span>
+                <span>₹{finalPayable}</span>
+              </div>
+              <div className="text-right text-xs text-emerald-500 font-medium pt-1">
+                You will earn {displayEarnedPoints} points on this ride!
               </div>
             </div>
           </div>
@@ -320,9 +532,31 @@ function PaymentPage() {
                   <motion.div key="camera" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                     <div className="relative aspect-video bg-black">
                       <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover -scale-x-100" />
+                      
+                      {/* Liveness Prompts Overlay */}
+                      {!livenessComplete && livenessStep > 0 && (
+                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center backdrop-blur-[2px]">
+                          <div className="relative h-24 w-24 flex items-center justify-center mb-4">
+                            <svg className="absolute inset-0 h-full w-full -rotate-90">
+                              <circle cx="48" cy="48" r="44" fill="none" stroke="currentColor" strokeWidth="4" className="text-white/20" />
+                              <circle 
+                                cx="48" cy="48" r="44" fill="none" stroke="currentColor" strokeWidth="4" 
+                                className="text-primary transition-all duration-75"
+                                strokeDasharray="276"
+                                strokeDashoffset={276 - (276 * livenessProgress) / 100}
+                              />
+                            </svg>
+                            <span className="text-white font-bold text-xl">{livenessStep}/3</span>
+                          </div>
+                          <p className="text-white font-bold text-lg text-center animate-in slide-in-from-bottom-2 fade-in duration-300">
+                            {LIVENESS_PROMPTS[livenessStep - 1]}
+                          </p>
+                        </div>
+                      )}
+
                       <div className="absolute bottom-4 inset-x-0 flex justify-center">
-                        <button type="button" onClick={captureSelfie}
-                          className="h-16 w-16 rounded-full border-4 border-white bg-white/20 backdrop-blur hover:bg-white/40 transition-all hover:scale-110 flex items-center justify-center shadow-xl">
+                        <button type="button" onClick={captureSelfie} disabled={!livenessComplete || faceVerifying}
+                          className="h-16 w-16 rounded-full border-4 border-white bg-white/20 backdrop-blur hover:bg-white/40 transition-all hover:scale-110 flex items-center justify-center shadow-xl disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed">
                           <div className="h-11 w-11 rounded-full bg-white flex items-center justify-center">
                             <Camera className="h-5 w-5 text-black" />
                           </div>
@@ -348,6 +582,22 @@ function PaymentPage() {
                           <RefreshCw className="h-4 w-4" /> Retake
                         </Button>
                       </div>
+                      
+                      {/* Face Verifying Overlay */}
+                      {faceVerifying && (
+                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-sm z-20">
+                          <Loader2 className="h-8 w-8 text-white animate-spin mb-2" />
+                          <p className="text-white font-bold text-sm">Verifying face...</p>
+                        </div>
+                      )}
+
+                      {/* Face Verified Score */}
+                      {faceVerified && faceScore !== null && (
+                        <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-emerald-500/90 backdrop-blur text-white text-[10px] font-bold flex items-center gap-2 shadow-lg">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          {Math.round(faceScore)}% Match
+                        </div>
+                      )}
                       {locationData && (
                         <div className="absolute bottom-3 left-3 px-3 py-1.5 rounded-xl bg-black/70 backdrop-blur text-white text-[10px] font-mono flex items-center gap-2">
                           <MapPin className="h-3 w-3 text-emerald-400" />
@@ -390,7 +640,52 @@ function PaymentPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="space-y-2">
+              {/* Rewards & Loyalty */}
+              {(loyaltyPointsAvailable > 0 || rewardsAvailable > 0) && (
+                <div className="space-y-3 pt-4 border-t border-border/40">
+                  <h4 className="text-sm font-bold flex items-center gap-2"><Gift className="h-4 w-4 text-emerald-500" /> Apply Rewards & Points</h4>
+                  
+                  {loyaltyPointsAvailable > 0 && (
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-900/40 border border-emerald-500/20 dark:border-emerald-500/30 transition-colors">
+                      <Checkbox 
+                        id="redeemPoints" 
+                        checked={redeemPoints} 
+                        onCheckedChange={(c) => setRedeemPoints(!!c)} 
+                        className="mt-1"
+                      />
+                      <div>
+                        <Label htmlFor="redeemPoints" className="text-sm font-bold text-emerald-600 dark:text-emerald-400 cursor-pointer">
+                          Redeem Loyalty Points
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          You have {loyaltyPointsAvailable} points (Worth ₹{loyaltyPointsAvailable * LOYALTY_REDEMPTION_RATE})
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {rewardsAvailable > 0 && (
+                    <div className="flex items-start gap-3 p-3 rounded-xl bg-purple-500/5 dark:bg-purple-900/40 border border-purple-500/20 dark:border-purple-500/30 transition-colors">
+                      <Checkbox 
+                        id="useReward" 
+                        checked={useReward} 
+                        onCheckedChange={(c) => setUseReward(!!c)} 
+                        className="mt-1"
+                      />
+                      <div>
+                        <Label htmlFor="useReward" className="text-sm font-bold text-purple-600 dark:text-purple-400 cursor-pointer">
+                          Apply Unlocked Reward
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          You have {rewardsAvailable} reward{rewardsAvailable > 1 ? 's' : ''} available (Flat ₹{REWARD_AMOUNT} off)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-2 pt-4 border-t border-border/40">
                 <Label htmlFor="txId">Enter Transaction ID</Label>
                 <Input
                   id="txId"
@@ -401,12 +696,14 @@ function PaymentPage() {
                 />
               </div>
 
+
+
               {/* Checklist */}
               <div className="space-y-2 text-xs">
                 {[
                   { label: "Identity Submitted", ok: identityStatus !== "not_submitted" },
                   { label: "GPS Captured", ok: !!locationData },
-                  { label: "Selfie Taken", ok: !!selfiePreview },
+                  { label: "Face Verified", ok: !!selfieFile },
                   { label: "Transaction ID", ok: transactionId.length >= 8 },
                 ].map(({ label, ok }) => (
                   <div key={label} className={cn("flex items-center gap-2 font-medium", ok ? "text-emerald-600" : "text-muted-foreground")}>

@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { isAdminRole, getRedirectPath } from "@/lib/roles";
+
 interface IdentityVerification {
   verificationStatus: "not_submitted" | "pending" | "verified" | "rejected";
   institutionName?: string;
@@ -21,7 +23,14 @@ interface User {
   avatar?: string;
   avatar_url?: string;
   phone?: string;
+  college?: string;
+  department?: string;
+  student_id?: string;
+  gender?: string;
+  address?: string;
   is_premium?: boolean;
+  is_active?: boolean;
+  loyalty_points?: number;
   identityVerification?: IdentityVerification;
 }
 
@@ -33,6 +42,7 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => void;
   isLoading: boolean;
   isAdmin: boolean;
+  profileComplete: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -102,29 +112,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("id,email,full_name,role,is_premium")
+        .select("*")
         .eq("id", authUser.id)
         .maybeSingle();
-      console.dir(error);
 
       if (error) {
-        console.log(JSON.stringify(error, null, 2));
+        console.error("[AuthContext] Critical Database Error loading profile:", error);
+        toast.error("Failed to load your profile details from the database.");
+        throw error;
       }
 
-      console.log("PROFILE DATA:", profile);
-      console.log("PROFILE ERROR:", error);
-
-      // Preserve existing role if profile query fails
-      const savedRole =
-        (localStorage.getItem("user_role") as
-          | "user"
-          | "admin"
-          | "super_admin"
-          | null) || "user";
-
-      const role =
-        profile?.role ||
-        savedRole;
+      const role = profile?.role;
 
       const finalUser: User = {
         id: profile?.id || authUser.id,
@@ -133,74 +131,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           authUser.user_metadata?.full_name ||
           authUser.email?.split("@")[0] ||
           "User",
-
         email: profile?.email || authUser.email || "",
-
         role: role,
-
-        avatar_url: authUser.user_metadata?.avatar_url || undefined,
-        phone: undefined,
+        avatar_url: profile?.avatar_url || authUser.user_metadata?.avatar_url || undefined,
+        phone: profile?.phone || undefined,
+        college: profile?.college || undefined,
+        department: profile?.department || undefined,
+        student_id: profile?.student_id || undefined,
+        gender: profile?.gender || undefined,
+        address: profile?.address || undefined,
         is_premium: !!profile?.is_premium,
+        is_active: profile?.is_active !== false,
+        loyalty_points: profile?.loyalty_points || 0,
       };
 
-      console.log(
-        "[AuthContext] Final User loaded:",
-        finalUser.email,
-        finalUser.role
-      );
+      console.log("[AuthContext] Final User loaded:", finalUser.email, finalUser.role);
 
       setUser(finalUser);
-      console.log("PROFILE:", profile);
-      console.log("PROFILE ROLE:", profile?.role);
-      console.log("SAVED ROLE:", savedRole);
-      console.log("FINAL USER:", finalUser);
-      console.log("FINAL ROLE:", finalUser.role);
+      localStorage.setItem("user", JSON.stringify(finalUser));
+      localStorage.setItem("user_role", finalUser.role);
 
-      localStorage.setItem(
-        "user",
-        JSON.stringify(finalUser)
-      );
-
-      localStorage.setItem(
-        "user_role",
-        finalUser.role
-      );
+      // Update last_login
+      if (profile?.id) {
+        supabase.from('profiles').update({ last_login: new Date().toISOString() }).eq('id', profile.id).then(() => {});
+      }
     } catch (e) {
-      console.error(
-        "[AuthContext] Error fetching user data:",
-        e
-      );
-
-      // Fallback user object
-      const fallbackUser: User = {
-        id: authUser.id,
-        name:
-          authUser.user_metadata?.full_name ||
-          authUser.email?.split("@")[0] ||
-          "User",
-
-        email: authUser.email || "",
-
-        role:
-          (localStorage.getItem("user_role") as
-            | "user"
-            | "admin"
-            | "super_admin"
-            | null) || "user",
-
-        avatar_url:
-          authUser.user_metadata?.avatar_url ||
-          undefined,
-
-        is_premium: false,
-      };
-
-      setUser(fallbackUser);
-
-      localStorage.setItem(
-        "user",
-        JSON.stringify(fallbackUser)
-      );
+      console.error("[AuthContext] Error fetching user data, halting login flow:", e);
+      // Remove the silent fallback that forces the user role.
+      // By not setting the user object, we prevent the incorrect redirect.
+      toast.error("Unable to verify user role. Contact support.");
     } finally {
       setIsLoading(false);
     }
@@ -244,6 +203,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (updates.role !== undefined) dbUpdates.role = updates.role;
     if (updates.avatar_url !== undefined) dbUpdates.avatar_url = updates.avatar_url;
     if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+    if (updates.college !== undefined) dbUpdates.college = updates.college;
+    if (updates.department !== undefined) dbUpdates.department = updates.department;
+    if (updates.student_id !== undefined) dbUpdates.student_id = updates.student_id;
+    if (updates.gender !== undefined) dbUpdates.gender = updates.gender;
+    if (updates.address !== undefined) dbUpdates.address = updates.address;
 
     try {
       if (Object.keys(dbUpdates).length > 0) {
@@ -254,17 +218,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+  // ── Single source of truth: delegate to roles helper ──
+  const isAdmin = isAdminRole(user?.role);
+  const profileComplete = isAdmin
+    ? true
+    : !!(user?.name && user?.phone);
 
   useEffect(() => {
     if (user) {
-      console.log("CURRENT ROLE:", user.role);
-      console.log("IS ADMIN:", isAdmin);
+      console.log("[Auth] Email:", user.email);
     }
-  }, [user, isAdmin]);
+  }, [user, isAdmin, profileComplete]);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, updateUser, isLoading, isAdmin }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateUser, isLoading, isAdmin, profileComplete }}>
       {children}
     </AuthContext.Provider>
   );

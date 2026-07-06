@@ -50,7 +50,7 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
       const { data: bData, error: bError } = await supabase
         .from('rentals')
         .select('*')
-        .eq('status', 'Pending');
+        .eq('status', 'pending');
 
       if (mError) throw mError;
       if (bError) throw bError;
@@ -115,7 +115,7 @@ export function AdminApprovals({ onCountChange }: { onCountChange?: (count: numb
   const doBookingAction = async (id: string, action: "approve" | "reject") => {
     setActionLoading("b-" + action + "-" + id);
     try {
-      const status = action === "approve" ? "Confirmed" : "Rejected";
+      const status = action === "approve" ? "confirmed" : "rejected";
       const { error } = await supabase.from('rentals').update({ status }).eq('id', id);
       if (error) throw error;
       

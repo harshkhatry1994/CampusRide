@@ -298,7 +298,7 @@ export default function Invoices() {
       // 4. Update the table in database
       const { error: updateErr } = await supabase
         .from('dealer_invoices')
-        .update({ pdf_url: publicUrl })
+        .update({ invoice_url: publicUrl })
         .eq('id', inv.id);
 
       if (updateErr) throw updateErr;
@@ -375,9 +375,9 @@ export default function Invoices() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-1.5">
-                        {inv.pdf_url ? (
+                        {inv.invoice_url ? (
                           <>
-                            <a href={inv.pdf_url} target="_blank" rel="noreferrer" download
+                            <a href={inv.invoice_url} target="_blank" rel="noreferrer" download
                               className="p-1.5 rounded-lg hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 transition-colors" title="Download Uploaded PDF">
                               <Download className="h-3.5 w-3.5" />
                             </a>
