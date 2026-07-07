@@ -4,6 +4,7 @@ import { ArrowRight, Zap, Shield, Sparkles, Clock, Bike as BikeIcon, Star } from
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { BikeCard, type Bike } from "@/components/bikes/BikeCard";
+import { useAuth } from "@/context/AuthContext";
 import heroBike from "@/assets/hero-bike.jpg";
 
 export const Route = createFileRoute("/")({
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const [featured, setFeatured] = useState<Bike[]>([]);
+  const { token, isAdmin } = useAuth();
 
   useEffect(() => {
     async function loadBikes() {
@@ -69,7 +71,13 @@ function Home() {
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link to="/signup">Create account</Link>
+                {token ? (
+                  <Link to={isAdmin ? "/admin" : "/dashboard"}>
+                    {isAdmin ? "Admin Dashboard" : "Dashboard"} <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                ) : (
+                  <Link to="/signup">Create account</Link>
+                )}
               </Button>
             </div>
             <div className="flex gap-8 pt-6">
@@ -165,9 +173,17 @@ function Home() {
           <p className="mt-3 text-primary-foreground/90 max-w-xl mx-auto">
             Join thousands of riders already using CampusRide. Sign up free in 30 seconds.
           </p>
-          <Button asChild size="lg" variant="secondary" className="mt-6">
-            <Link to="/signup">Get started — it's free</Link>
-          </Button>
+          {token ? (
+            <Button asChild size="lg" variant="secondary" className="mt-6">
+              <Link to={isAdmin ? "/admin" : "/dashboard"}>
+                {isAdmin ? "Go to Admin Dashboard" : "Go to my Dashboard"} <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild size="lg" variant="secondary" className="mt-6">
+              <Link to="/signup">Get started — it's free</Link>
+            </Button>
+          )}
         </div>
       </section>
     </div>

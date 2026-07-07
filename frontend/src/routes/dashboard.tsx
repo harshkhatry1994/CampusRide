@@ -27,6 +27,9 @@ import {
   FileText,
   Printer,
   Loader2,
+  UserCircle,
+  Settings,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,8 +47,16 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { generateReceipt } from "@/lib/receipt";
 import { cn } from "@/lib/utils";
+import { ProfileView } from "@/components/dashboard/ProfileView";
+import { SettingsView } from "@/components/dashboard/SettingsView";
+import { NotificationsView } from "@/components/dashboard/NotificationsView";
 
 export const Route = createFileRoute("/dashboard")({
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => {
+    return {
+      tab: (search.tab as string) || undefined,
+    };
+  },
   head: () => ({ meta: [{ title: "My Dashboard — CampusRide" }] }),
   component: Dashboard,
 });
@@ -55,8 +66,15 @@ const API_URL = import.meta.env.VITE_API_URL;
 function Dashboard() {
   const { user, token, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const activeTab = search.tab || "my-rides";
+
+  const handleTabChange = (val: string) => {
+    navigate({ to: "/dashboard", search: { tab: val }, replace: true });
+  };
 
   useEffect(() => {
     if (!token) {
@@ -77,11 +95,17 @@ function Dashboard() {
     const userId = user.id;
 
     async function loadBookings() {
-      const { data, error } = await supabase.from('rentals').select('*, bikes(*)').eq('user_id', userId).order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from("rentals")
+        .select("*, bikes(*)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
       if (error) {
+        console.error(error);
         toast.error("Failed to load your rides");
       } else if (data) {
-        setBookings(data);
+        setBookings(data || []);
       }
       setLoading(false);
     }
@@ -93,7 +117,7 @@ function Dashboard() {
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event: "*",
           schema: "public",
           table: "rentals",
           filter: `user_id=eq.${userId}`,
@@ -150,10 +174,10 @@ function Dashboard() {
         </div>
       </div>
 
-      <Tabs defaultValue="my-rides" className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="inline-flex w-auto bg-muted/50 border border-border/40 p-1 mb-8">
           <TabsTrigger value="my-rides" className="gap-2 px-6">
-            <BikeIcon className="h-4 w-4" /> My Rides
+            <BikeIcon className="h-4 w-4" /> My Bookings
           </TabsTrigger>
           <TabsTrigger value="rewards" className="gap-2 px-6">
             <Trophy className="h-4 w-4" /> Rewards
@@ -161,26 +185,58 @@ function Dashboard() {
           <TabsTrigger value="stats" className="gap-2 px-6">
             <BarChart3 className="h-4 w-4" /> Activity
           </TabsTrigger>
+          <TabsTrigger value="profile" className="gap-2 px-6">
+            <UserCircle className="h-4 w-4" /> Profile
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-2 px-6">
+            <Bell className="h-4 w-4" /> Notifications
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="gap-2 px-6">
+            <Settings className="h-4 w-4" /> Settings
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="my-rides" className="mt-0 focus-visible:outline-none">
           <div className="grid gap-6">
-            {bookings.length === 0 ? (
-              <div className="text-center py-20 bg-card border border-dashed border-border/60 rounded-[2rem]">
-                <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-20" />
-                <h3 className="text-lg font-bold mb-2">No rides yet</h3>
-                <p className="text-muted-foreground mb-6">Your rental journey starts here.</p>
-                <Button variant="outline" className="rounded-xl" asChild>
-                  <Link to="/bikes">Browse catalog</Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-                {bookings.map((b) => (
-                  <RideCard key={b.id} booking={b} />
-                ))}
-              </div>
-            )}
+            <Tabs defaultValue="upcoming" className="w-full">
+              <TabsList className="inline-flex w-auto bg-muted/50 border border-border/40 p-1 mb-6">
+                <TabsTrigger value="upcoming" className="px-6 font-bold">Upcoming</TabsTrigger>
+                <TabsTrigger value="completed" className="px-6 font-bold">Completed</TabsTrigger>
+                <TabsTrigger value="cancelled" className="px-6 font-bold">Cancelled</TabsTrigger>
+              </TabsList>
+              
+              {["upcoming", "completed", "cancelled"].map((tab) => {
+                const filteredBookings = bookings.filter(b => {
+                  const s = (b.status || '').toLowerCase().trim();
+                  if (tab === "upcoming") return ['pending', 'confirmed', 'draft', 'payment_pending'].includes(s);
+                  if (tab === "completed") return s === 'completed';
+                  return s === 'cancelled' || s === 'rejected';
+                });
+
+                return (
+                  <TabsContent key={tab} value={tab} className="mt-0 focus-visible:outline-none">
+                    {filteredBookings.length === 0 ? (
+                      <div className="text-center py-20 bg-card border border-dashed border-border/60 rounded-[2rem]">
+                        <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                        <h3 className="text-lg font-bold mb-2">No {tab} rides</h3>
+                        <p className="text-muted-foreground mb-6">You don't have any {tab} bookings.</p>
+                        {tab === "upcoming" && (
+                          <Button variant="outline" className="rounded-xl" asChild>
+                            <Link to="/bikes">Book a ride</Link>
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                        {filteredBookings.map((b) => (
+                          <RideCard key={b.id} booking={b} />
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
           </div>
         </TabsContent>
 
@@ -190,6 +246,18 @@ function Dashboard() {
 
         <TabsContent value="stats" className="mt-0 focus-visible:outline-none">
           <ActivityTab bookings={bookings} />
+        </TabsContent>
+
+        <TabsContent value="profile" className="mt-0 focus-visible:outline-none">
+          <ProfileView />
+        </TabsContent>
+
+        <TabsContent value="notifications" className="mt-0 focus-visible:outline-none">
+          <NotificationsView />
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-0 focus-visible:outline-none">
+          <SettingsView />
         </TabsContent>
       </Tabs>
     </div>
@@ -201,7 +269,8 @@ function RideCard({ booking }: { booking: any }) {
   const bike = booking.bikes || booking.bike;
   const statusLower = booking.status?.toLowerCase();
   const statusColors: any = {
-    pending: "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]",
+    draft: "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]",
+    pending: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.1)]",
     confirmed: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]",
     rejected: "bg-rose-500/10 text-rose-500 border-rose-500/20 shadow-[0_0_10px_rgba(244,63,94,0.1)]",
     completed: "bg-blue-500/10 text-blue-500 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.1)]",
@@ -260,26 +329,44 @@ function RideCard({ booking }: { booking: any }) {
 
         <div className="pt-4 border-t border-border/40 flex items-center justify-between">
           <div className="flex gap-2">
-            <Link to="/invoice/$bookingId" params={{ bookingId: booking.id }}>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 rounded-lg"
-              >
-                <Eye className="h-3.5 w-3.5 mr-1" /> View
-              </Button>
-            </Link>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-muted rounded-lg"
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open(`/invoice/${booking.id}`, "_blank");
-              }}
-            >
-              <Download className="h-3.5 w-3.5 mr-1" /> PDF
-            </Button>
+            {['draft', 'payment_pending', 'incomplete'].includes(statusLower) ? (
+              <Link to="/booking/$bikeId" params={{ bikeId: bike?.id || 'unknown' }} search={{ bookingId: booking.id }}>
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="h-8 px-3 text-[10px] font-black uppercase tracking-widest bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg shadow-glow"
+                >
+                  <ArrowRight className="h-3.5 w-3.5 mr-1" /> Resume Application
+                </Button>
+              </Link>
+            ) : statusLower === 'pending' ? (
+              <Badge variant="outline" className="h-8 px-3 text-[10px] font-black uppercase tracking-widest bg-indigo-500/10 text-indigo-500 border-indigo-500/20">
+                <Clock className="h-3 w-3 mr-1.5" /> Waiting for Admin
+              </Badge>
+            ) : (
+              <>
+                <Link to="/receipt/$bookingId" params={{ bookingId: booking.id }}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 rounded-lg"
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" /> View
+                  </Button>
+                </Link>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-muted rounded-lg"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(`/receipt/${booking.id}`, "_blank");
+                  }}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1" /> PDF
+                </Button>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -464,13 +551,13 @@ function RideCard({ booking }: { booking: any }) {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 p-8 pt-0">
-              <Link to="/invoice/$bookingId" params={{ bookingId: booking.id }} className="flex-1">
+              <Link to="/receipt/$bookingId" params={{ bookingId: booking.id }} className="flex-1">
                 <Button className="w-full h-14 rounded-2xl gap-2 font-bold bg-foreground text-background hover:bg-foreground/90">
-                  <Eye className="h-5 w-5" /> View Premium Invoice
+                  <Eye className="h-5 w-5" /> View Receipt
                 </Button>
               </Link>
               <Button
-                onClick={() => window.open(`/invoice/${booking.id}?download=true`, "_blank")}
+                onClick={() => window.open(`/receipt/${booking.id}?download=true`, "_blank")}
                 className="flex-1 h-14 rounded-2xl gap-2 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-glow"
               >
                 <Download className="h-5 w-5" /> Download PDF
@@ -478,7 +565,7 @@ function RideCard({ booking }: { booking: any }) {
               <Button
                 variant="outline"
                 className="h-14 w-14 rounded-2xl p-0 border-border/40"
-                onClick={() => window.open(`/invoice/${booking.id}?print=true`, "_blank")}
+                onClick={() => window.open(`/receipt/${booking.id}?print=true`, "_blank")}
               >
                 <Printer className="h-5 w-5" />
               </Button>
@@ -488,12 +575,12 @@ function RideCard({ booking }: { booking: any }) {
                 onClick={() => {
                   if (navigator.share) {
                     navigator.share({
-                      title: "CampusRide Invoice",
-                      url: window.location.origin + `/invoice/${booking.id}`,
+                      title: "CampusRide Receipt",
+                      url: window.location.origin + `/receipt/${booking.id}`,
                     });
                   } else {
                     navigator.clipboard.writeText(
-                      window.location.origin + `/invoice/${booking.id}`,
+                      window.location.origin + `/receipt/${booking.id}`,
                     );
                     toast.success("Link copied!");
                   }
@@ -519,48 +606,98 @@ function RideCard({ booking }: { booking: any }) {
 }
 
 function ActivityTab({ bookings }: any) {
-  const totalSpent = bookings.reduce((sum: any, b: any) => sum + Number(b.total_price || 0), 0);
+  const { user } = useAuth();
+  
+  const activeAndCompletedBookings = bookings.filter((b: any) => {
+    const s = b.status?.toLowerCase() || '';
+    return ['completed', 'pending', 'payment_pending', 'draft', 'incomplete', 'confirmed', 'accepted', 'upcoming', 'scheduled', 'reserved', 'booked', 'in_progress'].includes(s);
+  });
+  const completedBookings = bookings.filter((b: any) => {
+    const s = b.status?.toLowerCase() || '';
+    return s === 'completed';
+  });
+  
+  const totalSpent = completedBookings.reduce((sum: any, b: any) => sum + Number(b.total_price || 0), 0);
+  const loyaltyPoints = user?.loyalty_points || 0; // Use actual profile value as requested
+
+  // Generate last 7 days for the chart
+  const last7Days = Array.from({length: 7}).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d;
+  });
+  
+  const counts = last7Days.map(date => {
+    const dateStr = date.toISOString().split('T')[0];
+    return bookings.filter((b: any) => b.created_at?.startsWith(dateStr)).length; // count ALL bookings created on that day
+  });
+  
+  const maxCount = Math.max(...counts, 1);
+  const yAxisTicks = Array.from({ length: 3 }).map((_, i) => Math.round(maxCount * (2 - i) / 2));
+  // Ensure unique ticks if maxCount is 1
+  const uniqueTicks = Array.from(new Set(yAxisTicks)).sort((a, b) => b - a);
+
   return (
     <div className="grid gap-6 md:grid-cols-3">
       <StatCard
         icon={<TrendingUp className="h-5 w-5" />}
         title="Total Rides"
-        value={bookings.length}
-        desc="Lifetime bookings"
+        value={activeAndCompletedBookings.length}
+        desc="Active + Completed"
       />
       <StatCard
         icon={<IndianRupee className="h-5 w-5" />}
         title="Money Spent"
         value={`₹${totalSpent.toLocaleString()}`}
-        desc="Net expenditure"
+        desc="Completed payments"
       />
       <StatCard
         icon={<Zap className="h-5 w-5" />}
         title="Loyalty Points"
-        value={bookings.length * 100}
-        desc="Redeemable credits"
+        value={loyaltyPoints}
+        desc="Actual profile points"
       />
 
       <div className="md:col-span-3 p-8 rounded-[2.5rem] bg-card border border-border/60 shadow-elegant relative overflow-hidden">
-        <div className="absolute right-[-40px] top-[-40px] opacity-10">
-          <BarChart3 className="h-48 w-48" />
-        </div>
-        <h3 className="text-xl font-bold mb-6">Booking Frequency</h3>
-        <div className="h-48 flex items-end justify-between gap-2 px-4">
-          {[35, 65, 45, 90, 75, 55, 80].map((h, i) => (
-            <div key={i} className="flex-1 group relative">
-              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                {h}%
-              </div>
-              <div
-                className="w-full bg-primary/20 hover:bg-primary/40 transition-all rounded-t-xl"
-                style={{ height: `${h}%` }}
-              />
-              <div className="text-[10px] text-muted-foreground font-bold mt-2 text-center uppercase tracking-tighter">
-                Day {i + 1}
-              </div>
+        <h3 className="text-xl font-bold mb-6 text-foreground">Booking Frequency</h3>
+        <div className="flex h-64 w-full">
+          {/* Y-Axis */}
+          <div className="flex flex-col justify-between items-end pr-4 text-xs font-medium text-muted-foreground border-r border-border/40">
+            {uniqueTicks.map((tick, i) => (
+              <span key={i} className="leading-none">{tick}</span>
+            ))}
+          </div>
+          
+          {/* Chart Area */}
+          <div className="flex-1 flex items-end justify-between gap-2 px-4 relative">
+            {/* Horizontal Grid Lines */}
+            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none px-4">
+              {uniqueTicks.map((_, i) => (
+                <div key={i} className="w-full h-px bg-border/40" />
+              ))}
             </div>
-          ))}
+            
+            {counts.map((c, i) => {
+              const heightPercent = (c / Math.max(maxCount, 1)) * 100;
+              const dayName = last7Days[i].toLocaleDateString('en-US', { weekday: 'short' });
+              return (
+                <div key={i} className="flex-1 flex flex-col justify-end items-center group relative h-full pt-6">
+                  {c > 0 && (
+                    <div className="absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity bg-foreground text-background text-[10px] font-bold px-2 py-1 rounded shadow-lg whitespace-nowrap z-10">
+                      {c} {c === 1 ? 'booking' : 'bookings'}
+                    </div>
+                  )}
+                  <div
+                    className="w-full max-w-[40px] bg-amber-500/80 hover:bg-amber-500 transition-all rounded-t-sm z-0"
+                    style={{ height: `${heightPercent}%`, minHeight: c > 0 ? '4px' : '0' }}
+                  />
+                  <div className="text-[10px] text-foreground font-bold mt-2 text-center uppercase tracking-tighter w-full border-t border-border/40 pt-2">
+                    {dayName}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -573,8 +710,8 @@ function RewardsTab({ bookings }: any) {
 
   // Smart Logic: Only count completed rides for loyalty
   const completedRides = bookings.filter((b: any) => {
-    const s = b.status || b.lifecycle_status || "";
-    return s.toLowerCase().trim() === "completed";
+    const s = (b.status || '').toLowerCase().trim();
+    return s === "completed";
   }).length;
 
   // Smart Multiplier: Premium members get 2x progression

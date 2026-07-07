@@ -63,13 +63,26 @@ function ConfirmationPage() {
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Booking ID</span>
             <span className="font-mono text-sm font-bold text-primary">#{booking.id.split('-')[0].toUpperCase()}</span>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-glow">
-              <BikeIcon className="h-6 w-6" />
+          <div className="flex items-start gap-4">
+            <div className="h-16 w-20 rounded-2xl bg-muted/30 border border-border/40 overflow-hidden shrink-0">
+              {booking.bikes?.image_url ? (
+                <img
+                  src={booking.bikes.image_url.startsWith("http") ? booking.bikes.image_url : `${import.meta.env.VITE_API_URL}${booking.bikes.image_url}`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary">
+                  <BikeIcon className="h-6 w-6" />
+                </div>
+              )}
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-bold">{booking.bikes?.bike_name || booking.bikes?.brand}</h3>
               <p className="text-xs text-muted-foreground">{booking.bikes?.brand} {booking.bikes?.model}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase">Amount Paid</p>
+              <p className="font-black text-lg">₹{booking.total_price}</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 pt-4">
@@ -177,8 +190,10 @@ function ConfirmationPage() {
         <Button asChild size="lg" className="rounded-2xl bg-gradient-brand text-primary-foreground shadow-glow px-10">
           <Link to="/dashboard">Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" /></Link>
         </Button>
-        <Button onClick={() => generateReceipt(booking)} variant="outline" size="lg" className="rounded-2xl px-10 border-border/60">
-          <Download className="mr-2 h-4 w-4" /> Download Receipt
+        <Button asChild variant="outline" size="lg" className="rounded-2xl px-10 border-border/60">
+          <Link to="/receipt/$bookingId" params={{ bookingId: booking.id }} search={{ download: true }}>
+            <Download className="mr-2 h-4 w-4" /> Download Receipt
+          </Link>
         </Button>
       </div>
 

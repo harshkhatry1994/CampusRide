@@ -17,6 +17,7 @@ import {
   Image as ImageIcon,
   Camera,
   RefreshCw as RetakeIcon,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,13 +29,21 @@ import { toISTISOString } from "@/lib/dateUtils";
 
 export const Route = createFileRoute("/booking/$bikeId")({
   head: () => ({ meta: [{ title: "Book Your Ride — CampusRide" }] }),
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      bookingId: search.bookingId as string | undefined,
+    }
+  },
   component: BookingDetailsPage,
 });
 
 function BookingDetailsPage() {
   const { bikeId } = Route.useParams();
+  const search = Route.useSearch();
   const navigate = useNavigate();
   const { user, token } = useAuth();
+
+  const [existingBookingId, setExistingBookingId] = useState<string | null>(search.bookingId || null);
 
   const [bike, setBike] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -54,14 +63,17 @@ function BookingDetailsPage() {
 
   const [files, setFiles] = useState<{ [key: string]: File | null }>({
     licence: null,
-    aadhaar: null,
-    selfie: null,
   });
   const [previews, setPreviews] = useState<{ [key: string]: string | null }>({
     licence: null,
-    aadhaar: null,
-    selfie: null,
   });
+  const [verificationState, setVerificationState] = useState<{ [key: string]: "idle" | "verifying" | "verified" | "error" }>({
+    licence: "idle",
+  });
+  const [extractedData, setExtractedData] = useState<{ [key: string]: any }>({
+    licence: null,
+  });
+  const [verificationScores, setVerificationScores] = useState<{ [key: string]: { ai: number; ocr: number } }>({});
 
   useEffect(() => {
     if (!token) {
@@ -70,24 +82,123 @@ function BookingDetailsPage() {
       return;
     }
 
-    async function loadBike() {
+    async function loadBikeAndBooking() {
       const { data, error } = await supabase.from("bikes").select("*").eq("id", bikeId).single();
       if (!error && data) {
         setBike(data);
       }
+
+      if (user) {
+        let bookingToLoad = null;
+        if (existingBookingId) {
+          const { data: b } = await supabase.from("rentals").select("*").eq("id", existingBookingId).single();
+          if (b) bookingToLoad = b;
+        } else {
+          const { data: b } = await supabase.from("rentals")
+            .select("*")
+            .eq("bike_id", bikeId)
+            .eq("user_id", user.id)
+            .in("status", ["pending", "draft"])
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (b) {
+            bookingToLoad = b;
+            setExistingBookingId(b.id);
+          }
+        }
+
+        if (bookingToLoad) {
+          setBookingData(prev => ({
+            ...prev,
+            startDate: bookingToLoad.start_date ? bookingToLoad.start_date.split("T")[0] : prev.startDate,
+            startTime: bookingToLoad.start_date ? new Date(bookingToLoad.start_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : prev.startTime,
+            endDate: bookingToLoad.end_date ? bookingToLoad.end_date.split("T")[0] : prev.endDate,
+            endTime: bookingToLoad.end_date ? new Date(bookingToLoad.end_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : prev.endTime,
+            riderPhone: bookingToLoad.phone || prev.riderPhone,
+            address: bookingToLoad.address || prev.address,
+          }));
+
+          // verification_documents query removed
+
+          const currentStep = bookingToLoad.current_step;
+          if (currentStep) {
+             setTimeout(() => {
+               if (currentStep === "payment_pending" || currentStep === "licence_verified" || currentStep === "licence_uploaded") {
+                 window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                 toast.info(`Restored booking at step: ${currentStep.replace('_', ' ')}`);
+               }
+             }, 500);
+          } else {
+             toast.info("Resumed pending booking");
+          }
+        }
+      }
+
       setLoading(false);
     }
-    loadBike();
+    loadBikeAndBooking();
   }, [bikeId, token, navigate]);
 
-  const handleFileChange = (key: string, file: File | null) => {
+  const handleFileChange = async (key: string, file: File | null) => {
     if (file) {
-      setFiles({ ...files, [key]: file });
+      setFiles((prev) => ({ ...prev, [key]: file }));
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreviews({ ...previews, [key]: reader.result as string });
+        setPreviews((prev) => ({ ...prev, [key]: reader.result as string }));
       };
       reader.readAsDataURL(file);
+      await verifyDocumentAPI(key, file);
+    }
+  };
+
+  const verifyDocumentAPI = async (key: string, file: File) => {
+    try {
+      setVerificationState((prev) => ({ ...prev, [key]: "verifying" }));
+      
+      const formData = new FormData();
+      formData.append("documentType", "license");
+      formData.append("image", file);
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/verify-document`, {
+        method: "POST",
+        body: formData,
+      });
+      
+      const result = await res.json();
+      
+      if (!res.ok || !result.success) {
+        toast.error(result.message || "Verification failed");
+        setVerificationState((prev) => ({ ...prev, [key]: "error" }));
+        return;
+      }
+
+      console.log(result.data);
+      const detected = (result.data?.documentType || "").toLowerCase();
+
+      if (
+          !detected.includes("license") &&
+          !detected.includes("licence") &&
+          !detected.includes("driving")
+      ) {
+          toast.error("Please upload a valid Driving Licence.");
+      
+          setVerificationState(prev => ({
+              ...prev,
+              [key]: "error"
+          }));
+      
+          return;
+      }
+
+      setExtractedData((prev) => ({ ...prev, [key]: result.data }));
+      setVerificationScores((prev) => ({ ...prev, [key]: { ai: result.ai_confidence || 0, ocr: result.ocr_confidence || 0 } }));
+      setVerificationState((prev) => ({ ...prev, [key]: "verified" }));
+      
+    } catch (err) {
+      console.error(err);
+      toast.error("Network error during verification");
+      setVerificationState((prev) => ({ ...prev, [key]: "error" }));
     }
   };
 
@@ -109,89 +220,80 @@ function BookingDetailsPage() {
       toast.error("Please fill in all contact details");
       return;
     }
-    if (!files.licence || !files.aadhaar || !files.selfie) {
-      toast.error("Please upload your identity documents and snap a live selfie");
+    if (verificationState.licence !== "verified") {
+      toast.error("Please wait for your Driving Licence to be verified.");
       return;
     }
 
     setSubmitting(true);
+    let rentalPayload: any = null;
     try {
       const timestamp = Date.now();
       
-      // Upload files to Supabase Storage
-      const uploadPromises = [];
       let drivingLicenseUrl = null;
-      let idProofUrl = null;
-      let selfieUrl = null;
 
       if (files.licence) {
-        uploadPromises.push(
-          supabase.storage.from('driver-licenses').upload(`${user?.id}/dl_${timestamp}.jpg`, files.licence)
-            .then(res => {
-              console.log("driver-licenses upload result:", res);
-              if (!res.error && res.data) {
-                const { data } = supabase.storage.from('driver-licenses').getPublicUrl(res.data.path);
-                drivingLicenseUrl = data.publicUrl;
-              }
-            })
-        );
-      }
-      if (files.aadhaar) {
-        uploadPromises.push(
-          supabase.storage.from('student-ids').upload(`${user?.id}/aadhaar_${timestamp}.jpg`, files.aadhaar)
-            .then(res => {
-              console.log("student-ids upload result:", res);
-              if (!res.error && res.data) {
-                const { data } = supabase.storage.from('student-ids').getPublicUrl(res.data.path);
-                idProofUrl = data.publicUrl;
-              }
-            })
-        );
-      }
-      if (files.selfie) {
-        uploadPromises.push(
-          supabase.storage.from('profile-photos').upload(`${user?.id}/selfie_${timestamp}.jpg`, files.selfie)
-            .then(res => {
-              console.log("profile-photos upload result:", res);
-              if (!res.error && res.data) {
-                const { data } = supabase.storage.from('profile-photos').getPublicUrl(res.data.path);
-                selfieUrl = data.publicUrl;
-              }
-            })
-        );
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("driver-licenses")
+          .upload(`${user?.id}/dl_${Date.now()}.jpg`, files.licence, {
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.error("Driving license upload failed:", uploadError);
+          throw uploadError;
+        }
+
+        const { data: publicUrl } = supabase.storage
+          .from("driver-licenses")
+          .getPublicUrl(uploadData.path);
+
+        console.log("Upload path:", uploadData.path);
+        console.log("Public URL:", publicUrl.publicUrl);
+
+        if (!publicUrl || !publicUrl.publicUrl) {
+          throw new Error("Failed to generate public URL for driving license.");
+        }
+
+        drivingLicenseUrl = publicUrl.publicUrl;
+        console.log("License URL:", drivingLicenseUrl);
       }
 
-      await Promise.all(uploadPromises);
-
-      // We attempt to insert all fields. If the table is missing columns, Postgres will ignore or error.
-      // To be safe, we insert the base schema fields.
-      const { data, error } = await supabase.from('rentals').insert({
+      rentalPayload = {
         bike_id: bikeId,
         user_id: user?.id,
-        status: 'pending',
+        status: 'draft',
         start_date: toISTISOString(bookingData.startDate, bookingData.startTime),
         end_date: toISTISOString(bookingData.endDate, bookingData.endTime),
         total_price: totalAmount,
-        driving_license_url: drivingLicenseUrl,
-        id_proof_url: idProofUrl,
-        selfie_url: selfieUrl,
+        id_proof_url: null,
         address: bookingData.address,
-        phone: bookingData.riderPhone
-      }).select().single();
+        phone: bookingData.riderPhone,
+        current_step: 'payment_pending'
+      };
 
-      if (error) throw error;
+      if (drivingLicenseUrl) {
+         rentalPayload.driving_license_url = drivingLicenseUrl;
+      }
+
+      let rentalId;
+      if (existingBookingId) {
+        const { data, error } = await supabase.from('rentals').update(rentalPayload).eq('id', existingBookingId).select().single();
+        if (error) throw error;
+        rentalId = data.id;
+      } else {
+        const { data, error } = await supabase.from('rentals').insert(rentalPayload).select().single();
+        if (error) throw error;
+        rentalId = data.id;
+      }
+
+      // verification_documents insert logic removed
 
       toast.success("Booking & Documents Saved!");
-      navigate({ to: "/policy/$bookingId", params: { bookingId: data.id }, replace: true });
+      navigate({ to: "/policy/$bookingId", params: { bookingId: rentalId }, replace: true });
     } catch (err: any) {
-      console.error("Rental insert error:", err);
-      console.error("Full rental insert error object:", {
-        message: err?.message,
-        details: err?.details,
-        hint: err?.hint,
-        code: err?.code,
-        error: err
-      });
+      console.log("Rental payload:", rentalPayload);
+      console.log("Supabase error:", JSON.stringify(err, null, 2));
       toast.error("Booking creation failed. Please try again.");
     } finally {
       setSubmitting(false);
@@ -302,26 +404,12 @@ function BookingDetailsPage() {
               <DocUploadSection
                 title="Driving Licence"
                 preview={previews.licence}
+                status={verificationState.licence}
+                documentsMatched={true}
+                documentsMismatch={false}
                 onUpload={(f: File | null) => handleFileChange("licence", f)}
                 description="Front side of your valid Driving Licence."
               />
-              <DocUploadSection
-                title="Aadhaar Card"
-                preview={previews.aadhaar}
-                onUpload={(f: File | null) => handleFileChange("aadhaar", f)}
-                description="Front side of your Aadhaar for address proof."
-              />
-              <div className="sm:col-span-2">
-                <Label className="mb-3 block font-semibold text-base">
-                  Live Selfie Verification <span className="text-destructive">*</span>
-                </Label>
-                <WebcamCapture
-                  onCapture={(file, dataUri) => {
-                    setFiles((prev) => ({ ...prev, selfie: file }));
-                    setPreviews((prev) => ({ ...prev, selfie: dataUri }));
-                  }}
-                />
-              </div>
               <div className="sm:col-span-2 p-4 rounded-2xl bg-primary/5 border border-primary/20 flex items-center gap-4">
                 <ShieldCheck className="h-6 w-6 text-primary shrink-0" />
                 <p className="text-[10px] text-muted-foreground italic">
@@ -367,7 +455,7 @@ function BookingDetailsPage() {
 
             <Button
               onClick={handleInitializeBooking}
-              disabled={submitting}
+              disabled={submitting || verificationState.licence !== "verified"}
               className="w-full h-14 rounded-2xl bg-gradient-premium-gold hover:opacity-90 font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               {submitting ? "Saving Documents..." : "Continue to Payment"}{" "}
@@ -388,19 +476,42 @@ function BookingDetailsPage() {
   );
 }
 
-function DocUploadSection({ title, preview, onUpload, description }: any) {
+function DocUploadSection({ title, preview, status, documentsMatched, documentsMismatch, onUpload, description }: any) {
+  const [verifyingText, setVerifyingText] = useState("Uploading...");
+
+  useEffect(() => {
+    if (status === "verifying") {
+      const texts = ["Uploading...", "Reading Document...", "AI Verification..."];
+      let i = 0;
+      setVerifyingText(texts[0]);
+      const interval = setInterval(() => {
+        i++;
+        if (i < texts.length) {
+          setVerifyingText(texts[i]);
+        }
+      }, 1500);
+      return () => clearInterval(interval);
+    }
+  }, [status]);
+
   return (
     <div className="space-y-3">
-      <Label>{title}</Label>
-      <label className="block w-full cursor-pointer">
+      <Label className="flex justify-between items-center">
+        {title}
+        {status === "verifying" && <span className="text-xs text-amber-500 font-bold animate-pulse flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/> {verifyingText}</span>}
+        {status === "verified" && <span className="text-xs text-emerald-500 font-bold flex items-center gap-1">Licence Verified <CheckCircle2 className="h-3 w-3"/></span>}
+        {status === "error" && <span className="text-xs text-destructive font-bold">Verification Failed</span>}
+      </Label>
+      <label className={status === "verifying" ? "block w-full cursor-not-allowed opacity-70" : "block w-full cursor-pointer"}>
         <input
           type="file"
           accept="image/*"
           className="hidden"
+          disabled={status === "verifying"}
           onChange={(e) => onUpload(e.target.files?.[0] || null)}
         />
         {preview ? (
-          <div className="relative aspect-[3/2] w-full rounded-2xl overflow-hidden border border-border/40 shadow-inner group">
+          <div className={`relative aspect-[3/2] w-full rounded-2xl overflow-hidden border ${status === 'verified' ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : status === 'error' ? 'border-destructive' : 'border-border/40'} shadow-inner group`}>
             <img src={preview} alt="Preview" className="h-full w-full object-cover" />
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <span className="text-white text-xs font-bold">Replace File</span>

@@ -5,29 +5,46 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  Eye, EyeOff, UserPlus, ArrowRight, ShieldCheck, Zap, Loader2,
-  ChevronRight,
+  Eye, EyeOff, ArrowRight, ShieldCheck, Zap, Loader2,
+  ChevronRight, Mail, ArrowLeft
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/lib/supabase";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+  InputOTPSeparator,
+} from "@/components/ui/input-otp";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({ meta: [{ title: "Create Account — CampusRide" }] }),
   component: SignupPage,
 });
 
+type SignupMode = "main" | "otp";
 
 function SignupPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  
+  const [mode, setMode] = useState<SignupMode>("main");
+  
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  
   const [show, setShow] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
 
   async function handleGoogle() {
     setGoogleLoading(true);
@@ -48,7 +65,6 @@ function SignupPage() {
         setGoogleLoading(false);
         return;
       }
-      // Browser will redirect to Google — no further action needed
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || "Google Signup failed");
@@ -58,23 +74,26 @@ function SignupPage() {
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !confirmPassword) {
       toast.error("Please fill in all fields");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
       return;
     }
     if (password.length < 6) {
       toast.error("Password must be at least 6 characters");
       return;
     }
+    
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            name,
-          }
+          data: { name }
         }
       });
 
@@ -84,21 +103,43 @@ function SignupPage() {
         return;
       }
 
-      toast.success("Account created! Check your email if verification is required.");
-      if (data.session) {
-        navigate({ to: "/dashboard" });
-      } else {
-        navigate({ to: "/login" });
-      }
+      toast.success("Account created! Please verify your email.");
+      setMode("otp");
+      
     } catch (err) {
       toast.error("Network error");
+    } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleVerifyOtp() {
+    if (otpCode.length !== 6) {
+      toast.error("Please enter the complete 6-digit OTP");
+      return;
+    }
+    setOtpLoading(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: otpCode,
+        type: "signup",
+      });
+      if (error) {
+        toast.error(error.message || "Invalid OTP");
+      } else {
+        toast.success("Account verified successfully!");
+        navigate({ to: "/dashboard" });
+      }
+    } catch (err) {
+      toast.error("Verification failed. Please try again.");
+    } finally {
+      setOtpLoading(false);
     }
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 selection:bg-primary/20">
-      {/* Background Elements */}
       <div className="fixed inset-0 overflow-hidden -z-10 pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[120px]" />
@@ -125,12 +166,13 @@ function SignupPage() {
           </p>
         </div>
 
-
-
         <div className="bg-card rounded-[2.5rem] p-10 shadow-elegant border border-border/40 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-primary/10 transition-colors" />
 
+          <AnimatePresence mode="wait">
+            {mode === "main" && (
               <motion.div
+                key="main"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
@@ -193,11 +235,9 @@ function SignupPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="flex justify-between items-center ml-1">
-                      <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                        Security Phrase
-                      </Label>
-                    </div>
+                    <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                      Security Phrase
+                    </Label>
                     <div className="relative">
                       <Input
                         id="password"
@@ -216,13 +256,35 @@ function SignupPage() {
                       </button>
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                      Confirm Security Phrase
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirm ? "text" : "password"}
+                        className="h-12 rounded-xl border-border bg-muted/20 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all pl-4 pr-12"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirm(!showConfirm)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
 
                   <Button
                     type="submit"
                     disabled={loading || googleLoading}
                     className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-bold transition-all shadow-glow hover:opacity-90 gap-2 mt-4"
                   >
-                    Continue <ChevronRight className="h-4 w-4" />
+                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Continue <ChevronRight className="h-4 w-4" /></>}
                   </Button>
                 </form>
 
@@ -235,6 +297,54 @@ function SignupPage() {
                   </p>
                 </div>
               </motion.div>
+            )}
+
+            {mode === "otp" && (
+              <motion.div
+                key="otp"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-6"
+              >
+                <div className="text-center space-y-2">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+                    <Mail className="h-8 w-8 text-primary" />
+                  </div>
+                  <h2 className="text-2xl font-black">Verify Email</h2>
+                  <p className="text-sm text-muted-foreground">
+                    We sent a 6-digit code to {email}
+                  </p>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="flex justify-center">
+                    <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} className="h-14 w-12 text-lg font-bold rounded-xl border-border" />
+                        <InputOTPSlot index={1} className="h-14 w-12 text-lg font-bold rounded-xl border-border" />
+                        <InputOTPSlot index={2} className="h-14 w-12 text-lg font-bold rounded-xl border-border" />
+                      </InputOTPGroup>
+                      <InputOTPSeparator />
+                      <InputOTPGroup>
+                        <InputOTPSlot index={3} className="h-14 w-12 text-lg font-bold rounded-xl border-border" />
+                        <InputOTPSlot index={4} className="h-14 w-12 text-lg font-bold rounded-xl border-border" />
+                        <InputOTPSlot index={5} className="h-14 w-12 text-lg font-bold rounded-xl border-border" />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <Button
+                    onClick={handleVerifyOtp}
+                    disabled={otpLoading || otpCode.length !== 6}
+                    className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-bold shadow-glow hover:opacity-90 transition-all gap-2"
+                  >
+                    {otpLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Verify & Complete <ArrowRight className="h-4 w-4" /></>}
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="mt-10 flex items-center justify-center gap-6 opacity-60">

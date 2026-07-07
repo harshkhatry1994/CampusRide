@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { isAdminRole, getRedirectPath } from "@/lib/roles";
 
 export const Route = createFileRoute("/auth/callback")({
   // Don't validate/strip search params — let Supabase SDK read them from the URL
@@ -57,7 +58,29 @@ function AuthCallbackPage() {
 
         setStatus("success");
         toast.success("Welcome to CampusRide! 🚀");
-        setTimeout(() => navigate({ to: "/dashboard" }), 200);
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", authUser.id)
+          .single();
+
+        if (error) {
+          console.error("[AuthCallback] Critical Database Error loading profile:", error);
+          throw error;
+        }
+
+        const computedIsAdmin = isAdminRole(profile?.role);
+        const profileComplete = !!(profile?.full_name && profile?.phone && profile?.college);
+        const redirectDest = getRedirectPath(profile?.role, profileComplete);
+
+        console.log("[AuthCallback] Email:", authUser.email);
+        console.log("[AuthCallback] Role from database:", profile?.role);
+        console.log("[AuthCallback] Computed isAdmin:", computedIsAdmin);
+        console.log("[AuthCallback] Redirect destination:", redirectDest);
+
+        setTimeout(() => {
+          navigate({ to: redirectDest });
+        }, 200);
       } catch (err: any) {
         console.error("[AuthCallback] Unexpected error during sync:", err);
         setErrorMsg(err.message || "Unexpected error during profile sync");

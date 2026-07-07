@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Bike, Sparkles, User as UserIcon, LogOut, Crown, LayoutDashboard, Settings } from "lucide-react";
+import { Bike, Sparkles, User as UserIcon, LogOut, Crown, LayoutDashboard, Settings, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { BackButton } from "./BackButton";
@@ -109,15 +109,33 @@ export function Navbar() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-border/50 my-2" />
                   <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary cursor-pointer px-3 py-2.5 transition-colors">
-                    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center w-full">
+                    <Link to={isAdmin ? "/admin" : "/dashboard"} search={isAdmin ? undefined : { tab: 'my-rides' }} className="flex items-center w-full">
                       <LayoutDashboard className="mr-2 h-4 w-4" />
-                      <span>{isAdmin ? "Admin Panel" : "My Dashboard"}</span>
+                      <span>{isAdmin ? "Admin Panel" : "My Bookings"}</span>
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-xl focus:bg-muted cursor-pointer px-3 py-2.5 transition-colors">
-                    <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Account Settings</span>
-                  </DropdownMenuItem>
+                  {!isAdmin && (
+                    <>
+                      <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary cursor-pointer px-3 py-2.5 transition-colors">
+                        <Link to="/dashboard" search={{ tab: 'profile' }} className="flex items-center w-full">
+                          <UserIcon className="mr-2 h-4 w-4" />
+                          <span>My Profile</span>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl focus:bg-primary/10 focus:text-primary cursor-pointer px-3 py-2.5 transition-colors">
+                        <Link to="/dashboard" search={{ tab: 'notifications' }} className="flex items-center w-full">
+                          <Bell className="mr-2 h-4 w-4" />
+                          <span>Notifications</span>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="rounded-xl focus:bg-muted cursor-pointer px-3 py-2.5 transition-colors">
+                        <Link to="/dashboard" search={{ tab: 'settings' }} className="flex items-center w-full text-muted-foreground hover:text-foreground">
+                          <Settings className="mr-2 h-4 w-4" />
+                          <span>Account Settings</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator className="bg-border/50 my-2" />
                   <DropdownMenuItem onClick={handleLogout} className="rounded-xl focus:bg-destructive/10 focus:text-destructive text-destructive cursor-pointer px-3 py-2.5 transition-colors">
                     <LogOut className="mr-2 h-4 w-4" />

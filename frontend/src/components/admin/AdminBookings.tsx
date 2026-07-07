@@ -77,8 +77,7 @@ export function AdminBookings({ onCountChange }: { onCountChange?: () => void })
   const [selected, setSelected] = useState<any>(null);
   const [previewDoc, setPreviewDoc] = useState<{ url: string; label: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  const RENTAL_SELECT = `*, bikes(*)`;
+  const RENTAL_SELECT = "*, bikes(*)";
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
@@ -91,6 +90,12 @@ export function AdminBookings({ onCountChange }: { onCountChange?: () => void })
       if (error) throw error;
       
       const rentals = data || [];
+      console.log("================================");
+      console.log("Rentals fetched:", rentals);
+      console.log("Count:", rentals.length);
+      console.log("Statuses:", rentals.map(r => r.status));
+      console.log("Filtered Status:", filterStatus);
+      console.log("================================");
       const userIds = [...new Set(rentals.map(r => r.user_id).filter(Boolean))];
       
       if (userIds.length > 0) {
@@ -158,6 +163,7 @@ const doAction = async (id: string, action: string, body: any = {}) => {
   }
 };
 
+
 const filtered = Array.isArray(bookings) ? bookings.filter((b) => {
   const customerName = (b.profiles?.full_name || b.profiles?.email || "").toLowerCase();
   const bikeName = (b.bikes?.bike_name || `${b.bikes?.brand || ""} ${b.bikes?.model || ""}`.trim() || "").toLowerCase();
@@ -167,6 +173,9 @@ const filtered = Array.isArray(bookings) ? bookings.filter((b) => {
   const matchesStatus = filterStatus === "all" || b.status?.toLowerCase() === filterStatus;
   return matchesSearch && matchesStatus;
 }) : [];
+
+console.log("Filtered Count:", filtered.length);
+console.log(filtered);
 
 return (
   <div className="space-y-8 bg-background text-foreground transition-colors duration-300">
@@ -484,6 +493,9 @@ return (
                       })}
                     </div>
                   </div>
+                  
+
+
                 </div>
 
                 {/* Right Column: Asset + Financials */}
@@ -584,18 +596,37 @@ return (
                   <Button
                     variant="outline"
                     className="rounded-xl border-border h-12 px-8 font-black text-[10px] uppercase tracking-widest text-amber-500 hover:bg-amber-500/10 hover:border-amber-500/30 transition-all gap-2"
-                    onClick={() => doAction(selected.id, "update", { status: "cancelled" })}
+                    onClick={() => {
+                      doAction(selected.id, "update", { status: "cancelled" });
+                      setSelected(null);
+                    }}
                     disabled={!!actionLoading}
                   >
                     <X className="h-4 w-4" /> Cancel Booking
                   </Button>
-                  <Button
-                    className="rounded-xl bg-emerald-500 text-white shadow-[0_10px_20px_-10px_rgba(16,185,129,0.5)] h-12 px-10 font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all gap-2"
-                    onClick={() => doAction(selected.id, "update", { status: "confirmed" })}
-                    disabled={!!actionLoading}
-                  >
-                    <Check className="h-5 w-5" /> Verify & Authorize
-                  </Button>
+                  {selected.status?.toLowerCase() === 'confirmed' ? (
+                    <Button
+                      className="rounded-xl bg-blue-500 text-white shadow-[0_10px_20px_-10px_rgba(59,130,246,0.5)] h-12 px-10 font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 transition-all gap-2"
+                      onClick={() => {
+                        doAction(selected.id, "update", { status: "completed" });
+                        setSelected(null);
+                      }}
+                      disabled={!!actionLoading}
+                    >
+                      <Check className="h-5 w-5" /> Complete Ride
+                    </Button>
+                  ) : (
+                    <Button
+                      className="rounded-xl bg-emerald-500 text-white shadow-[0_10px_20px_-10px_rgba(16,185,129,0.5)] h-12 px-10 font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all gap-2"
+                      onClick={() => {
+                        doAction(selected.id, "update", { status: "confirmed" });
+                        setSelected(null);
+                      }}
+                      disabled={!!actionLoading}
+                    >
+                      <Check className="h-5 w-5" /> Approve Booking
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

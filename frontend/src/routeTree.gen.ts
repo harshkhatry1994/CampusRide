@@ -16,15 +16,15 @@ import { Route as PaymentFailedRouteImport } from './routes/payment-failed'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as CompleteProfileRouteImport } from './routes/complete-profile'
 import { Route as BikesRouteImport } from './routes/bikes'
-import { Route as AdminPortalRouteImport } from './routes/admin-portal'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BikesIndexRouteImport } from './routes/bikes.index'
+import { Route as ReceiptBookingIdRouteImport } from './routes/receipt.$bookingId'
 import { Route as PolicyBookingIdRouteImport } from './routes/policy.$bookingId'
 import { Route as PaymentBookingIdRouteImport } from './routes/payment.$bookingId'
-import { Route as InvoiceBookingIdRouteImport } from './routes/invoice.$bookingId'
 import { Route as ConfirmationBookingIdRouteImport } from './routes/confirmation.$bookingId'
 import { Route as BookingSuccessRouteImport } from './routes/booking.success'
 import { Route as BookingStatusRouteImport } from './routes/booking.status'
@@ -68,14 +68,14 @@ const ContactRoute = ContactRouteImport.update({
   path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompleteProfileRoute = CompleteProfileRouteImport.update({
+  id: '/complete-profile',
+  path: '/complete-profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BikesRoute = BikesRouteImport.update({
   id: '/bikes',
   path: '/bikes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminPortalRoute = AdminPortalRouteImport.update({
-  id: '/admin-portal',
-  path: '/admin-portal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -98,6 +98,11 @@ const BikesIndexRoute = BikesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => BikesRoute,
 } as any)
+const ReceiptBookingIdRoute = ReceiptBookingIdRouteImport.update({
+  id: '/receipt/$bookingId',
+  path: '/receipt/$bookingId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PolicyBookingIdRoute = PolicyBookingIdRouteImport.update({
   id: '/policy/$bookingId',
   path: '/policy/$bookingId',
@@ -106,11 +111,6 @@ const PolicyBookingIdRoute = PolicyBookingIdRouteImport.update({
 const PaymentBookingIdRoute = PaymentBookingIdRouteImport.update({
   id: '/payment/$bookingId',
   path: '/payment/$bookingId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InvoiceBookingIdRoute = InvoiceBookingIdRouteImport.update({
-  id: '/invoice/$bookingId',
-  path: '/invoice/$bookingId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConfirmationBookingIdRoute = ConfirmationBookingIdRouteImport.update({
@@ -153,8 +153,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
-  '/admin-portal': typeof AdminPortalRoute
   '/bikes': typeof BikesRouteWithChildren
+  '/complete-profile': typeof CompleteProfileRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
@@ -169,16 +169,16 @@ export interface FileRoutesByFullPath {
   '/booking/status': typeof BookingStatusRoute
   '/booking/success': typeof BookingSuccessRoute
   '/confirmation/$bookingId': typeof ConfirmationBookingIdRoute
-  '/invoice/$bookingId': typeof InvoiceBookingIdRoute
   '/payment/$bookingId': typeof PaymentBookingIdRoute
   '/policy/$bookingId': typeof PolicyBookingIdRoute
+  '/receipt/$bookingId': typeof ReceiptBookingIdRoute
   '/bikes/': typeof BikesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
-  '/admin-portal': typeof AdminPortalRoute
+  '/complete-profile': typeof CompleteProfileRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
@@ -193,9 +193,9 @@ export interface FileRoutesByTo {
   '/booking/status': typeof BookingStatusRoute
   '/booking/success': typeof BookingSuccessRoute
   '/confirmation/$bookingId': typeof ConfirmationBookingIdRoute
-  '/invoice/$bookingId': typeof InvoiceBookingIdRoute
   '/payment/$bookingId': typeof PaymentBookingIdRoute
   '/policy/$bookingId': typeof PolicyBookingIdRoute
+  '/receipt/$bookingId': typeof ReceiptBookingIdRoute
   '/bikes': typeof BikesIndexRoute
 }
 export interface FileRoutesById {
@@ -203,8 +203,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
-  '/admin-portal': typeof AdminPortalRoute
   '/bikes': typeof BikesRouteWithChildren
+  '/complete-profile': typeof CompleteProfileRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
@@ -219,9 +219,9 @@ export interface FileRoutesById {
   '/booking/status': typeof BookingStatusRoute
   '/booking/success': typeof BookingSuccessRoute
   '/confirmation/$bookingId': typeof ConfirmationBookingIdRoute
-  '/invoice/$bookingId': typeof InvoiceBookingIdRoute
   '/payment/$bookingId': typeof PaymentBookingIdRoute
   '/policy/$bookingId': typeof PolicyBookingIdRoute
+  '/receipt/$bookingId': typeof ReceiptBookingIdRoute
   '/bikes/': typeof BikesIndexRoute
 }
 export interface FileRouteTypes {
@@ -230,8 +230,8 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
-    | '/admin-portal'
     | '/bikes'
+    | '/complete-profile'
     | '/contact'
     | '/dashboard'
     | '/login'
@@ -246,16 +246,16 @@ export interface FileRouteTypes {
     | '/booking/status'
     | '/booking/success'
     | '/confirmation/$bookingId'
-    | '/invoice/$bookingId'
     | '/payment/$bookingId'
     | '/policy/$bookingId'
+    | '/receipt/$bookingId'
     | '/bikes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
     | '/admin'
-    | '/admin-portal'
+    | '/complete-profile'
     | '/contact'
     | '/dashboard'
     | '/login'
@@ -270,17 +270,17 @@ export interface FileRouteTypes {
     | '/booking/status'
     | '/booking/success'
     | '/confirmation/$bookingId'
-    | '/invoice/$bookingId'
     | '/payment/$bookingId'
     | '/policy/$bookingId'
+    | '/receipt/$bookingId'
     | '/bikes'
   id:
     | '__root__'
     | '/'
     | '/about'
     | '/admin'
-    | '/admin-portal'
     | '/bikes'
+    | '/complete-profile'
     | '/contact'
     | '/dashboard'
     | '/login'
@@ -295,9 +295,9 @@ export interface FileRouteTypes {
     | '/booking/status'
     | '/booking/success'
     | '/confirmation/$bookingId'
-    | '/invoice/$bookingId'
     | '/payment/$bookingId'
     | '/policy/$bookingId'
+    | '/receipt/$bookingId'
     | '/bikes/'
   fileRoutesById: FileRoutesById
 }
@@ -305,8 +305,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRoute
-  AdminPortalRoute: typeof AdminPortalRoute
   BikesRoute: typeof BikesRouteWithChildren
+  CompleteProfileRoute: typeof CompleteProfileRoute
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
@@ -320,9 +320,9 @@ export interface RootRouteChildren {
   BookingStatusRoute: typeof BookingStatusRoute
   BookingSuccessRoute: typeof BookingSuccessRoute
   ConfirmationBookingIdRoute: typeof ConfirmationBookingIdRoute
-  InvoiceBookingIdRoute: typeof InvoiceBookingIdRoute
   PaymentBookingIdRoute: typeof PaymentBookingIdRoute
   PolicyBookingIdRoute: typeof PolicyBookingIdRoute
+  ReceiptBookingIdRoute: typeof ReceiptBookingIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -376,18 +376,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/complete-profile': {
+      id: '/complete-profile'
+      path: '/complete-profile'
+      fullPath: '/complete-profile'
+      preLoaderRoute: typeof CompleteProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/bikes': {
       id: '/bikes'
       path: '/bikes'
       fullPath: '/bikes'
       preLoaderRoute: typeof BikesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin-portal': {
-      id: '/admin-portal'
-      path: '/admin-portal'
-      fullPath: '/admin-portal'
-      preLoaderRoute: typeof AdminPortalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -418,6 +418,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BikesIndexRouteImport
       parentRoute: typeof BikesRoute
     }
+    '/receipt/$bookingId': {
+      id: '/receipt/$bookingId'
+      path: '/receipt/$bookingId'
+      fullPath: '/receipt/$bookingId'
+      preLoaderRoute: typeof ReceiptBookingIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/policy/$bookingId': {
       id: '/policy/$bookingId'
       path: '/policy/$bookingId'
@@ -430,13 +437,6 @@ declare module '@tanstack/react-router' {
       path: '/payment/$bookingId'
       fullPath: '/payment/$bookingId'
       preLoaderRoute: typeof PaymentBookingIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/invoice/$bookingId': {
-      id: '/invoice/$bookingId'
-      path: '/invoice/$bookingId'
-      fullPath: '/invoice/$bookingId'
-      preLoaderRoute: typeof InvoiceBookingIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/confirmation/$bookingId': {
@@ -507,8 +507,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRoute,
-  AdminPortalRoute: AdminPortalRoute,
   BikesRoute: BikesRouteWithChildren,
+  CompleteProfileRoute: CompleteProfileRoute,
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
@@ -522,9 +522,9 @@ const rootRouteChildren: RootRouteChildren = {
   BookingStatusRoute: BookingStatusRoute,
   BookingSuccessRoute: BookingSuccessRoute,
   ConfirmationBookingIdRoute: ConfirmationBookingIdRoute,
-  InvoiceBookingIdRoute: InvoiceBookingIdRoute,
   PaymentBookingIdRoute: PaymentBookingIdRoute,
   PolicyBookingIdRoute: PolicyBookingIdRoute,
+  ReceiptBookingIdRoute: ReceiptBookingIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

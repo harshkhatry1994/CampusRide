@@ -1,10 +1,10 @@
 import { Outlet, createRootRoute } from "@tanstack/react-router";
 import "../styles.css";
 import { Toaster } from "@/components/ui/sonner";
-import { Navbar } from "@/components/site/Navbar";
-import { Footer } from "@/components/site/Footer";
-import { ChatBot } from "@/components/site/ChatBot";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
+import { useRouterState } from "@tanstack/react-router";
+import { CustomerLayout } from "@/layouts/CustomerLayout";
 
 function NotFoundComponent() {
   return (
@@ -28,11 +28,8 @@ export const Route = createRootRoute({
   notFoundComponent: NotFoundComponent,
 });
 
-import { ThemeProvider } from "@/context/ThemeContext";
-import { useRouterState } from "@tanstack/react-router";
-
-// Routes that use their own full-screen layout (no Navbar/Footer)
-const PORTAL_ROUTES = ["/admin-portal", "/admin"];
+// Routes that use their own full-screen layout
+const PORTAL_ROUTES = ["/admin", "/complete-profile"];
 
 function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -47,15 +44,10 @@ function RootComponent() {
             <Toaster richColors position="top-right" duration={2000} />
           </>
         ) : (
-          <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-300">
-            <Navbar />
-            <main className="flex-1">
-              <Outlet />
-            </main>
-            <Footer />
-            <ChatBot />
+          <CustomerLayout>
+            <Outlet />
             <Toaster richColors position="top-right" duration={2000} />
-          </div>
+          </CustomerLayout>
         )}
       </AuthProvider>
     </ThemeProvider>

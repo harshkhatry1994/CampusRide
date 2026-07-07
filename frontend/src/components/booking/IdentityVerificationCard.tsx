@@ -63,12 +63,15 @@ export function IdentityVerificationCard({
       const { data: uploadData, error: uploadError } = await supabase.storage.from('student-ids').upload(`${user?.id}/id_${timestamp}.jpg`, idFile);
       
       if (uploadError) throw uploadError;
-
+      const { data: publicUrlData } = supabase.storage
+        .from("student-ids")
+        .getPublicUrl(uploadData.path);
+          
       const identityVerification = {
         verificationStatus: 'pending',
         institutionName: institutionName,
         idNumber: idNumber,
-        documentUrl: uploadData.path
+        student_id_url: publicUrlData.publicUrl
       };
 
       const { error: updateError } = await supabase.auth.updateUser({

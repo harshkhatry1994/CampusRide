@@ -5,6 +5,8 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import verificationRoutes from './routes/verificationRoutes.js';
+import notifyRoutes from './routes/notify.js';
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +66,9 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'CampusRide API is running 🚲 (Supabase Migration in Progress)' });
 });
+
+app.use('/api', verificationRoutes);
+app.use('/api/notify', notifyRoutes);
 
 // =========================
 //    404 & ERROR HANDLER

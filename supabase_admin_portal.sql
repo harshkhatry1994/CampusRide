@@ -1,8 +1,3 @@
--- ============================================================
--- CampusRide Admin Portal — Supabase Schema
--- Run this in: Supabase Dashboard → SQL Editor
--- ============================================================
-
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -152,7 +147,7 @@ CREATE TABLE IF NOT EXISTS public.dealer_invoices (
   sale_id UUID REFERENCES public.dealer_sales(id),
   bike_id UUID REFERENCES public.dealer_bikes(id),
   customer_id UUID REFERENCES public.dealer_customers(id),
-  pdf_url TEXT,
+  invoice_url TEXT,
   issued_date TIMESTAMPTZ DEFAULT NOW(),
   status TEXT DEFAULT 'issued' CHECK (status IN ('draft', 'issued', 'paid', 'cancelled')),
   created_by UUID REFERENCES public.portal_profiles(id),
