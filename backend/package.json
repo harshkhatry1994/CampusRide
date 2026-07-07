@@ -12,7 +12,10 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1075.0",
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.108.2",
+    "axios": "^1.18.1",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -21,12 +24,14 @@
     "express-rate-limit": "^8.5.1",
     "express-validator": "^7.3.2",
     "firebase": "^12.15.0",
+    "formidable": "^3.5.4",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
-    "nodemailer": "^8.0.7"
+    "nodemailer": "^8.0.7",
+    "resend": "^6.17.1"
   }
 }
