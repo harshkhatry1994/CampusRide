@@ -80,6 +80,13 @@ export function IdentityVerificationCard({
       
       if (updateError) throw updateError;
 
+      // Also save the ID proof URL to the profiles table for admin visibility
+      if (user?.id && publicUrlData.publicUrl) {
+        await supabase.from('profiles').update({
+          id_proof_url: publicUrlData.publicUrl,
+        }).eq('id', user.id);
+      }
+
       toast.success("Identity submitted! Pending admin review.");
       onSuccess(identityVerification);
     } catch (err: any) {

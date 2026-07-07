@@ -439,9 +439,9 @@ return (
                     <div className="grid grid-cols-2 gap-4">
                       {[
                         { label: "Driving License", url: selected.drivingLicense || selected.licenceUrl || selected.licenseUrl || selected.driving_license_url },
-                        { label: "ID Proof", url: selected.idProof || selected.aadhaarUrl || selected.idProofUrl || selected.id_proof_url },
+                        { label: "ID Proof", url: selected.profiles?.id_proof_url || selected.idProof || selected.aadhaarUrl || selected.idProofUrl || selected.id_proof_url },
                         { label: "Rider Selfie", url: selected.selfieImage || selected.selfieUrl || selected.additionalDocUrl || selected.selfie_url },
-                        { label: "Payment Proof", url: selected.paymentProof || selected.paymentProofUrl },
+                        { label: "Payment Proof", url: selected.payment_proof_url || selected.paymentProof || selected.paymentProofUrl },
                       ].map((doc) => {
                         const hasUrl = !!doc.url && doc.url !== "null";
                         const fullUrl = hasUrl ? doc.url : null;

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   CreditCard, ArrowRight, QrCode, Zap, Info, ShieldCheck, Bike as BikeIcon,
   Calendar, Clock, Loader2, Camera, CheckCircle2, RefreshCw, MapPin,
-  AlertTriangle, Lock, Gift, Tag, Smartphone,
+  AlertTriangle, Lock, Gift, Tag, Smartphone, Upload, Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,8 @@ function PaymentPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [transactionId, setTransactionId] = useState("");
+  const [paymentScreenshot, setPaymentScreenshot] = useState<File | null>(null);
+  const [paymentScreenshotPreview, setPaymentScreenshotPreview] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [redeemPoints, setRedeemPoints] = useState(false);
   const [useReward, setUseReward] = useState(false);
@@ -267,6 +269,10 @@ function PaymentPage() {
       toast.error("Please submit your identity verification first"); return;
     }
 
+    if (!paymentScreenshot) {
+      toast.error("Please upload a payment screenshot"); return;
+    }
+
     setSubmitting(true);
     try {
       // 1. Upload Geo-Selfie
@@ -297,11 +303,27 @@ function PaymentPage() {
       const newRewardAvailable = Math.max((currentProfile.reward_available || 0) - (useReward ? 1 : 0), 0);
       const newRewardUsed = (currentProfile.reward_used || 0) + (useReward ? 1 : 0);
 
-      // 3. Update Rental (Atomic sequence start)
+      // 3. Upload Payment Screenshot
+      let paymentProofUrl = null;
+      if (paymentScreenshot) {
+        const screenshotPath = `${user!.id}/payment_${Date.now()}.jpg`;
+        const { data: ssUpload, error: ssError } = await supabase.storage
+          .from('payment-proofs')
+          .upload(screenshotPath, paymentScreenshot, { upsert: true });
+        if (ssError) {
+          console.error('Payment screenshot upload failed:', ssError);
+        } else if (ssUpload) {
+          const { data: ssUrl } = supabase.storage.from('payment-proofs').getPublicUrl(ssUpload.path);
+          paymentProofUrl = ssUrl.publicUrl;
+        }
+      }
+
+      // 4. Update Rental (Atomic sequence start)
       const { error: updateError } = await supabase.from('rentals').update({
         transaction_id: transactionId,
         status: 'pending',
         ...(geoSelfieUrl ? { selfie_url: geoSelfieUrl } : {}),
+        ...(paymentProofUrl ? { payment_proof_url: paymentProofUrl } : {}),
       }).eq('id', bookingId);
       
       if (updateError) throw updateError;
@@ -696,7 +718,48 @@ function PaymentPage() {
                 />
               </div>
 
-
+              {/* Payment Screenshot Upload */}
+              <div className="space-y-2">
+                <Label>Payment Screenshot</Label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id="paymentScreenshotInput"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setPaymentScreenshot(file);
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => setPaymentScreenshotPreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    } else {
+                      setPaymentScreenshotPreview(null);
+                    }
+                  }}
+                />
+                <label htmlFor="paymentScreenshotInput" className="block cursor-pointer">
+                  {paymentScreenshotPreview ? (
+                    <div className="relative aspect-[16/9] rounded-2xl overflow-hidden border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)] group">
+                      <img src={paymentScreenshotPreview} alt="Payment Screenshot" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-white text-xs font-bold">Replace Screenshot</span>
+                      </div>
+                      <div className="absolute top-2 right-2 h-6 w-6 rounded-full bg-emerald-500 flex items-center justify-center shadow">
+                        <CheckCircle2 className="h-4 w-4 text-white" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="aspect-[16/9] rounded-2xl border-2 border-dashed border-border/40 flex flex-col items-center justify-center gap-2 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+                      <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Upload className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <span className="text-xs font-medium text-muted-foreground">Upload Screenshot</span>
+                      <p className="text-[10px] text-muted-foreground/60">Screenshot of your UPI payment confirmation</p>
+                    </div>
+                  )}
+                </label>
+              </div>
 
               {/* Checklist */}
               <div className="space-y-2 text-xs">
@@ -704,6 +767,7 @@ function PaymentPage() {
                   { label: "Identity Submitted", ok: identityStatus !== "not_submitted" },
                   { label: "GPS Captured", ok: !!locationData },
                   { label: "Face Verified", ok: !!selfieFile },
+                  { label: "Payment Screenshot", ok: !!paymentScreenshot },
                   { label: "Transaction ID", ok: transactionId.length >= 8 },
                 ].map(({ label, ok }) => (
                   <div key={label} className={cn("flex items-center gap-2 font-medium", ok ? "text-emerald-600" : "text-muted-foreground")}>
@@ -715,7 +779,7 @@ function PaymentPage() {
 
               <Button
                 onClick={handlePayment}
-                disabled={submitting || !selfieFile || !locationData || identityStatus === "not_submitted" || transactionId.length < 8}
+                disabled={submitting || !selfieFile || !locationData || identityStatus === "not_submitted" || transactionId.length < 8 || !paymentScreenshot}
                 className="w-full h-14 rounded-2xl bg-gradient-premium-gold font-extrabold shadow-glow hover:opacity-90 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 {submitting ? "Verifying..." : "Confirm Payment"} <ArrowRight className="ml-2 h-4 w-4" />
