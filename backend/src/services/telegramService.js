@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+
 export const sendBookingNotification = async (bookingDetails) => {
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
   const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
@@ -16,10 +17,6 @@ export const sendBookingNotification = async (bookingDetails) => {
 <b>Payment ID:</b> ${bookingDetails.paymentId}
 `;
 
-  console.log("Token:", TELEGRAM_BOT_TOKEN);
-  console.log("Chat ID:", TELEGRAM_CHAT_ID);
-  console.log("Message:", message);
-
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     const response = await axios.post(url, {
@@ -31,7 +28,25 @@ export const sendBookingNotification = async (bookingDetails) => {
   } catch (error) {
     console.error("Telegram Error Status:", error.response?.status);
     console.error("Telegram Error Data:", error.response?.data);
-    console.error(error.message);
+    throw error;
+  }
+};
+
+export const sendCustomerNotification = async (chatId, message) => {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  if (!TELEGRAM_BOT_TOKEN || !chatId) return null;
+
+  try {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const response = await axios.post(url, {
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML'
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Telegram Error Status:", error.response?.status);
+    console.error("Telegram Error Data:", error.response?.data);
     throw error;
   }
 };

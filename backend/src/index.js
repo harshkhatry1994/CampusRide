@@ -7,6 +7,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import verificationRoutes from './routes/verificationRoutes.js';
 import notifyRoutes from './routes/notify.js';
+import telegramRoutes from './routes/telegram.js';
+import telegramWebhookRoutes from './routes/telegramWebhook.js';
+import verifyPaymentRoutes from './routes/verifyPayment.js';
 
 // Load environment variables
 dotenv.config();
@@ -69,6 +72,9 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api', verificationRoutes);
 app.use('/api/notify', notifyRoutes);
+app.use('/api/telegram', telegramRoutes);
+app.use('/api/telegram/webhook', telegramWebhookRoutes);
+app.use('/api/verify-payment', verifyPaymentRoutes);
 
 // =========================
 //    404 & ERROR HANDLER
