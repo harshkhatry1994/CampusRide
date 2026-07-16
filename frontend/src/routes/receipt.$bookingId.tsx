@@ -160,30 +160,7 @@ function InvoicePage() {
       </div>
     );
 
-  const isRestricted = ["cancelled", "rejected", "failed"].includes(booking.status?.toLowerCase());
-  if (isRestricted)
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full glass-premium rounded-[3rem] p-10 text-center border border-slate-200 shadow-2xl">
-          <div className="h-24 w-24 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
-            <XCircle className="h-12 w-12" />
-          </div>
-          <h2 className="text-3xl font-black text-slate-900 mb-3">
-            Booking {booking.status.toUpperCase()}
-          </h2>
-          <p className="text-slate-500 font-medium mb-10 leading-relaxed text-lg">
-            Invoices are only generated for successful and confirmed rides. This booking is
-            currently {booking.status}.
-          </p>
-          <Link to="/dashboard">
-            <Button className="w-full h-16 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 text-lg font-black shadow-xl hover:shadow-slate-300 transition-all">
-              Back to Dashboard
-            </Button>
-          </Link>
-        </div>
-      </div>
-    );
-
+  // The invoice is now dynamically generated for all statuses.
   const invoiceNumber = `INV-${booking.id?.split('-')[0].toUpperCase()}`;
   const invoiceDate = new Date().toLocaleDateString("en-IN", {
     day: "numeric",
@@ -278,12 +255,16 @@ function InvoicePage() {
             <Badge
               className={cn(
                 "px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-widest mb-4",
-                booking.payments?.[0]?.status === "Completed" || booking.status !== "Pending"
+                booking.status?.toLowerCase() === "completed"
                   ? "bg-emerald-500 text-white shadow-lg shadow-emerald-100"
+                  : booking.status?.toLowerCase() === "cancelled" || booking.status?.toLowerCase() === "rejected" 
+                  ? "bg-rose-500 text-white shadow-lg shadow-rose-100"
+                  : booking.status?.toLowerCase() === "confirmed" || booking.status?.toLowerCase() === "ride in progress"
+                  ? "bg-blue-500 text-white shadow-lg shadow-blue-100"
                   : "bg-amber-500 text-white shadow-lg shadow-amber-100",
               )}
             >
-              {booking.payments?.[0]?.status === "Completed" || booking.status !== "Pending" ? "• PAYMENT RECEIVED •" : "• PAYMENT PENDING •"}
+              • STATUS: {booking.status?.toUpperCase()} •
             </Badge>
             <div className="space-y-1">
               <p className="text-3xl font-black text-slate-900 tracking-tighter">{invoiceNumber}</p>
@@ -304,7 +285,7 @@ function InvoicePage() {
               </h3>
               <div className="space-y-1">
                 <p className="text-xl font-black text-slate-900 leading-none">
-                  {userDetails.name}
+                  {userDetails.full_name || userDetails.name || "Customer"}
                 </p>
                 <p className="text-slate-500 font-bold text-sm">{userDetails.email}</p>
                 <p className="text-slate-500 font-bold text-sm">{userDetails.phone || "N/A"}</p>
@@ -353,22 +334,22 @@ function InvoicePage() {
 
             <div className="space-y-5">
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-3">
-                Compliance
+                Transaction Details
               </h3>
-              <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-100 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center text-emerald-500 shadow-sm">
-                  <ShieldCheck className="h-6 w-6" />
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    Transaction ID
+                  </p>
+                  <p className="text-xs font-black text-slate-800 break-all">{booking.transaction_id || "N/A"}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-emerald-700/50 uppercase tracking-wider">
-                    Verification
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    Loyalty Data
                   </p>
-                  <p className="text-sm font-black text-emerald-700">COMPLIANT</p>
+                  <p className="text-xs font-black text-emerald-600">Points Earned: {Math.round(pricing.totalAmount * 0.05)}</p>
                 </div>
               </div>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter text-center italic">
-                Digitally Verified via CampusRide TrustEngine
-              </p>
             </div>
           </div>
 

@@ -9,7 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SignupUpRouteImport } from './routes/signup-up'
 import { Route as PremiumPaymentRouteImport } from './routes/premium-payment'
 import { Route as PremiumRouteImport } from './routes/premium'
 import { Route as PaymentFailedRouteImport } from './routes/payment-failed'
@@ -18,6 +18,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CompleteProfileRouteImport } from './routes/complete-profile'
 import { Route as BikesRouteImport } from './routes/bikes'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -33,9 +34,9 @@ import { Route as BookingBikeIdRouteImport } from './routes/booking.$bikeId'
 import { Route as BikesBikeIdRouteImport } from './routes/bikes.$bikeId'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
+const SignupUpRoute = SignupUpRouteImport.update({
+  id: '/signup-up',
+  path: '/signup-up',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PremiumPaymentRoute = PremiumPaymentRouteImport.update({
@@ -76,6 +77,11 @@ const CompleteProfileRoute = CompleteProfileRouteImport.update({
 const BikesRoute = BikesRouteImport.update({
   id: '/bikes',
   path: '/bikes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -144,15 +150,16 @@ const BikesBikeIdRoute = BikesBikeIdRouteImport.update({
   getParentRoute: () => BikesRoute,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth/callback',
-  path: '/auth/callback',
-  getParentRoute: () => rootRouteImport,
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/auth': typeof AuthRouteWithChildren
   '/bikes': typeof BikesRouteWithChildren
   '/complete-profile': typeof CompleteProfileRoute
   '/contact': typeof ContactRoute
@@ -161,7 +168,7 @@ export interface FileRoutesByFullPath {
   '/payment-failed': typeof PaymentFailedRoute
   '/premium': typeof PremiumRoute
   '/premium-payment': typeof PremiumPaymentRoute
-  '/signup': typeof SignupRoute
+  '/signup-up': typeof SignupUpRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/bikes/$bikeId': typeof BikesBikeIdRoute
   '/booking/$bikeId': typeof BookingBikeIdRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/auth': typeof AuthRouteWithChildren
   '/complete-profile': typeof CompleteProfileRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
@@ -185,7 +193,7 @@ export interface FileRoutesByTo {
   '/payment-failed': typeof PaymentFailedRoute
   '/premium': typeof PremiumRoute
   '/premium-payment': typeof PremiumPaymentRoute
-  '/signup': typeof SignupRoute
+  '/signup-up': typeof SignupUpRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/bikes/$bikeId': typeof BikesBikeIdRoute
   '/booking/$bikeId': typeof BookingBikeIdRoute
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
+  '/auth': typeof AuthRouteWithChildren
   '/bikes': typeof BikesRouteWithChildren
   '/complete-profile': typeof CompleteProfileRoute
   '/contact': typeof ContactRoute
@@ -211,7 +220,7 @@ export interface FileRoutesById {
   '/payment-failed': typeof PaymentFailedRoute
   '/premium': typeof PremiumRoute
   '/premium-payment': typeof PremiumPaymentRoute
-  '/signup': typeof SignupRoute
+  '/signup-up': typeof SignupUpRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/bikes/$bikeId': typeof BikesBikeIdRoute
   '/booking/$bikeId': typeof BookingBikeIdRoute
@@ -230,6 +239,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/auth'
     | '/bikes'
     | '/complete-profile'
     | '/contact'
@@ -238,7 +248,7 @@ export interface FileRouteTypes {
     | '/payment-failed'
     | '/premium'
     | '/premium-payment'
-    | '/signup'
+    | '/signup-up'
     | '/auth/callback'
     | '/bikes/$bikeId'
     | '/booking/$bikeId'
@@ -255,6 +265,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/auth'
     | '/complete-profile'
     | '/contact'
     | '/dashboard'
@@ -262,7 +273,7 @@ export interface FileRouteTypes {
     | '/payment-failed'
     | '/premium'
     | '/premium-payment'
-    | '/signup'
+    | '/signup-up'
     | '/auth/callback'
     | '/bikes/$bikeId'
     | '/booking/$bikeId'
@@ -279,6 +290,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/admin'
+    | '/auth'
     | '/bikes'
     | '/complete-profile'
     | '/contact'
@@ -287,7 +299,7 @@ export interface FileRouteTypes {
     | '/payment-failed'
     | '/premium'
     | '/premium-payment'
-    | '/signup'
+    | '/signup-up'
     | '/auth/callback'
     | '/bikes/$bikeId'
     | '/booking/$bikeId'
@@ -305,6 +317,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRoute
+  AuthRoute: typeof AuthRouteWithChildren
   BikesRoute: typeof BikesRouteWithChildren
   CompleteProfileRoute: typeof CompleteProfileRoute
   ContactRoute: typeof ContactRoute
@@ -313,8 +326,7 @@ export interface RootRouteChildren {
   PaymentFailedRoute: typeof PaymentFailedRoute
   PremiumRoute: typeof PremiumRoute
   PremiumPaymentRoute: typeof PremiumPaymentRoute
-  SignupRoute: typeof SignupRoute
-  AuthCallbackRoute: typeof AuthCallbackRoute
+  SignupUpRoute: typeof SignupUpRoute
   BookingBikeIdRoute: typeof BookingBikeIdRoute
   BookingFailedRoute: typeof BookingFailedRoute
   BookingStatusRoute: typeof BookingStatusRoute
@@ -327,11 +339,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
+    '/signup-up': {
+      id: '/signup-up'
+      path: '/signup-up'
+      fullPath: '/signup-up'
+      preLoaderRoute: typeof SignupUpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/premium-payment': {
@@ -388,6 +400,13 @@ declare module '@tanstack/react-router' {
       path: '/bikes'
       fullPath: '/bikes'
       preLoaderRoute: typeof BikesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -483,13 +502,23 @@ declare module '@tanstack/react-router' {
     }
     '/auth/callback': {
       id: '/auth/callback'
-      path: '/auth/callback'
+      path: '/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AuthRoute
     }
   }
 }
+
+interface AuthRouteChildren {
+  AuthCallbackRoute: typeof AuthCallbackRoute
+}
+
+const AuthRouteChildren: AuthRouteChildren = {
+  AuthCallbackRoute: AuthCallbackRoute,
+}
+
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface BikesRouteChildren {
   BikesBikeIdRoute: typeof BikesBikeIdRoute
@@ -507,6 +536,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRoute,
+  AuthRoute: AuthRouteWithChildren,
   BikesRoute: BikesRouteWithChildren,
   CompleteProfileRoute: CompleteProfileRoute,
   ContactRoute: ContactRoute,
@@ -515,8 +545,7 @@ const rootRouteChildren: RootRouteChildren = {
   PaymentFailedRoute: PaymentFailedRoute,
   PremiumRoute: PremiumRoute,
   PremiumPaymentRoute: PremiumPaymentRoute,
-  SignupRoute: SignupRoute,
-  AuthCallbackRoute: AuthCallbackRoute,
+  SignupUpRoute: SignupUpRoute,
   BookingBikeIdRoute: BookingBikeIdRoute,
   BookingFailedRoute: BookingFailedRoute,
   BookingStatusRoute: BookingStatusRoute,

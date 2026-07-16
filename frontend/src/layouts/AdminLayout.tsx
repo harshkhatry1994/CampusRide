@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Settings,
   Crown,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,7 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 
-export type AdminSection = "dashboard" | "inventory" | "bike_management" | "rentals" | "users" | "memberships" | "settings";
+export type AdminSection = "dashboard" | "inventory" | "bike_management" | "rentals" | "users" | "messages" | "memberships" | "settings";
 
 const NAV_ITEMS: { id: AdminSection; label: string; icon: React.ReactNode; badge?: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -27,6 +28,7 @@ const NAV_ITEMS: { id: AdminSection; label: string; icon: React.ReactNode; badge
   { id: "bike_management", label: "Bike Management", icon: <Shield className="h-4 w-4" /> },
   { id: "rentals", label: "Rental Requests", icon: <ReceiptText className="h-4 w-4" /> },
   { id: "users", label: "Users", icon: <Users className="h-4 w-4" /> },
+  { id: "messages", label: "Messages", icon: <Mail className="h-4 w-4" /> },
   { id: "memberships", label: "Memberships", icon: <Crown className="h-4 w-4" /> },
   { id: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
 ];

@@ -125,6 +125,8 @@ useEffect(() => {
 const doAction = async (id: string, action: string, body: any = {}) => {
   setActionLoading(action + id);
   try {
+    const originalRow = bookings.find(b => b.id === id);
+
     if (action === "delete") {
       const { error } = await supabase.from('rentals').delete().eq('id', id);
       if (error) throw error;
@@ -146,6 +148,46 @@ const doAction = async (id: string, action: string, body: any = {}) => {
       if (updatedRow.user_id) {
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', updatedRow.user_id).single();
         if (profile) updatedRow.profiles = profile;
+
+        // --- Loyalty System & Notifications ---
+        const newStatus = body.status?.toLowerCase();
+        const oldStatus = originalRow?.status?.toLowerCase();
+
+        if (newStatus && oldStatus !== newStatus && profile) {
+          let pointsUpdate = {};
+          
+          if (newStatus === "completed" && oldStatus !== "completed") {
+             // Award points
+             const baseTotal = updatedRow.total_price || updatedRow.pricing?.totalAmount || 0;
+             const earnedPoints = Math.round(baseTotal * (5 / 100)); // Assuming LOYALTY_PERCENT is 5
+             pointsUpdate = { loyalty_points: (profile.loyalty_points || 0) + earnedPoints };
+             toast.success(`Awarded ${earnedPoints} loyalty points to user!`);
+          } 
+          
+          // Apply profile updates if any
+          if (Object.keys(pointsUpdate).length > 0) {
+             await supabase.from('profiles').update(pointsUpdate).eq('id', updatedRow.user_id);
+          }
+
+          // Trigger Notify API for status change
+          try {
+             await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/notify`, {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                 type: `booking_${newStatus}`,
+                 userId: updatedRow.user_id,
+                 customerEmail: profile.email,
+                 status: newStatus,
+                 bookingId: updatedRow.id,
+                 bikeName: updatedRow.bikes?.bike_name || updatedRow.bikes?.brand,
+                 paymentAmount: updatedRow.total_price || updatedRow.pricing?.totalAmount || 0,
+               })
+             });
+          } catch (notifyErr) {
+             console.error("Failed to notify user:", notifyErr);
+          }
+        }
       }
       
       toast.success("Status updated successfully");
@@ -563,6 +605,50 @@ return (
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Phase 11: AI Verification Panel */}
+                  {selected.ai_verification_result && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2 px-2">
+                        <ShieldCheck className="h-3 w-3 text-primary" /> AI Verification Panel
+                      </h4>
+                      <div className="p-6 rounded-[2.5rem] bg-card border border-border shadow-elegant relative overflow-hidden group">
+                        <div className="flex items-center gap-3 mb-4 relative z-10">
+                           <Badge className={cn("px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm", selected.ai_verification_result.verified ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20")}>
+                              {selected.ai_verification_result.verified ? "🟢 Verified" : "🔴 Suspicious"}
+                           </Badge>
+                           <span className="text-xs font-bold text-muted-foreground">Confidence: {Math.round(selected.ai_verification_result.confidence)}%</span>
+                        </div>
+                        
+                        <div className="space-y-2 relative z-10">
+                           <div className="flex justify-between items-center text-xs font-bold border-b border-border/40 pb-2">
+                              <span>Transaction ID Match</span>
+                              <span className={selected.ai_verification_result.transactionMatch ? "text-emerald-500" : "text-rose-500"}>
+                                {selected.ai_verification_result.transactionMatch ? "Yes" : "No"}
+                              </span>
+                           </div>
+                           <div className="flex justify-between items-center text-xs font-bold border-b border-border/40 pb-2">
+                              <span>Amount Match</span>
+                              <span className={selected.ai_verification_result.amountMatch ? "text-emerald-500" : "text-rose-500"}>
+                                {selected.ai_verification_result.amountMatch ? "Yes" : "No"}
+                              </span>
+                           </div>
+                           <div className="flex justify-between items-center text-xs font-bold border-b border-border/40 pb-2">
+                              <span>UPI ID Match</span>
+                              <span className={selected.ai_verification_result.upiMatch ? "text-emerald-500" : "text-rose-500"}>
+                                {selected.ai_verification_result.upiMatch ? "Yes" : "No"}
+                              </span>
+                           </div>
+                        </div>
+
+                        {selected.ai_verification_result.ocrText && (
+                          <div className="mt-4 p-3 bg-muted/20 rounded-xl border border-border/30 max-h-24 overflow-y-auto custom-scrollbar relative z-10">
+                             <p className="text-[8px] font-mono text-muted-foreground break-words whitespace-pre-wrap">{selected.ai_verification_result.ocrText}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

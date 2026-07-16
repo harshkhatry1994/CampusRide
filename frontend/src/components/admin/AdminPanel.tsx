@@ -66,6 +66,7 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import { AdminSettings } from "./AdminSettings";
 import { AdminMemberships } from "./AdminMemberships";
+import { AdminMessages } from "./AdminMessages";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -132,6 +133,12 @@ export function AdminPanel() {
             <Crown className="h-4 w-4" /> Memberships
           </TabsTrigger>
           <TabsTrigger
+            value="direct-messages"
+            className="gap-2 px-6 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow transition-all"
+          >
+            <Mail className="h-4 w-4" /> Direct Messages
+          </TabsTrigger>
+          <TabsTrigger
             value="chatbot"
             className="gap-2 px-6 rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-glow transition-all"
           >
@@ -171,6 +178,9 @@ export function AdminPanel() {
 
         <TabsContent value="memberships" className="mt-0">
           <AdminMemberships />
+        </TabsContent>
+        <TabsContent value="direct-messages" className="mt-0">
+          <AdminMessages token={token} />
         </TabsContent>
         <TabsContent value="chatbot" className="mt-0">
           <ChatbotSettings />

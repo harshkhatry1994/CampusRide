@@ -19,7 +19,7 @@ import {
   InputOTPSeparator,
 } from "@/components/ui/input-otp";
 
-export const Route = createFileRoute("/signup")({
+export const Route = createFileRoute("/signup-up")({
   head: () => ({ meta: [{ title: "Create Account — CampusRide" }] }),
   component: SignupPage,
 });

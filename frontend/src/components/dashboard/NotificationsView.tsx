@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Bell, Check, Loader2, AlertCircle } from "lucide-react";
+import { Bell, Check, Loader2, AlertCircle, Trash2, MessageSquare, ShieldCheck, CreditCard, Bike } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 
@@ -9,7 +9,7 @@ interface AppNotification {
   title: string;
   message: string;
   type: string;
-  is_read: boolean;
+  read: boolean;
   action_url: string | null;
   created_at: string;
 }
@@ -24,7 +24,7 @@ export function NotificationsView() {
 
     const fetchNotifications = async () => {
       const { data } = await supabase
-        .from('user_notifications')
+        .from('notifications')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -37,11 +37,11 @@ export function NotificationsView() {
 
     // Subscribe to new notifications
     const channel = supabase
-      .channel('user_notifications')
+      .channel('notifications')
       .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
-        table: 'user_notifications',
+        table: 'notifications',
         filter: `user_id=eq.${user.id}`
       }, (payload) => {
         setNotifications(prev => [payload.new as AppNotification, ...prev]);
@@ -54,13 +54,19 @@ export function NotificationsView() {
   }, [user]);
 
   const markAsRead = async (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    await supabase.from('user_notifications').update({ is_read: true }).eq('id', id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    await supabase.from('notifications').update({ read: true }).eq('id', id);
   };
 
   const markAllAsRead = async () => {
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    await supabase.from('user_notifications').update({ is_read: true }).eq('user_id', user?.id).eq('is_read', false);
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    await supabase.from('notifications').update({ read: true }).eq('user_id', user?.id).eq('read', false);
+  };
+
+  const deleteNotification = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    await supabase.from('notifications').delete().eq('id', id);
   };
 
   if (loading) {
@@ -71,7 +77,7 @@ export function NotificationsView() {
     );
   }
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -106,24 +112,32 @@ export function NotificationsView() {
             {notifications.map((notification) => (
               <div 
                 key={notification.id} 
-                className={`p-6 transition-colors ${notification.is_read ? 'opacity-70' : 'bg-primary/5 hover:bg-primary/10'}`}
-                onClick={() => !notification.is_read && markAsRead(notification.id)}
+                className={`p-6 transition-colors ${notification.read ? 'opacity-70' : 'bg-primary/5 hover:bg-primary/10'}`}
+                onClick={() => !notification.read && markAsRead(notification.id)}
               >
                 <div className="flex gap-4">
                   <div className={`mt-1 h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
-                    notification.is_read ? 'bg-muted text-muted-foreground' : 'bg-primary/20 text-primary'
+                    notification.read ? 'bg-muted text-muted-foreground' : 'bg-primary/20 text-primary'
                   }`}>
-                    {notification.type === 'booking_confirmed' || notification.type === 'payment_success' ? (
+                    {notification.type.includes('approved') || notification.type.includes('success') ? (
                       <Check className="h-5 w-5" />
-                    ) : notification.type === 'booking_cancelled' ? (
+                    ) : notification.type.includes('cancelled') || notification.type.includes('rejected') ? (
                       <AlertCircle className="h-5 w-5" />
+                    ) : notification.type === 'admin_message' ? (
+                      <MessageSquare className="h-5 w-5" />
+                    ) : notification.type.includes('payment') ? (
+                      <CreditCard className="h-5 w-5" />
+                    ) : notification.type.includes('ride') || notification.type.includes('booking') ? (
+                      <Bike className="h-5 w-5" />
+                    ) : notification.type.includes('membership') ? (
+                      <ShieldCheck className="h-5 w-5" />
                     ) : (
                       <Bell className="h-5 w-5" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between gap-2 items-start">
-                      <h4 className={`text-base truncate ${notification.is_read ? 'font-medium' : 'font-bold'}`}>
+                      <h4 className={`text-base truncate ${notification.read ? 'font-medium' : 'font-bold'}`}>
                         {notification.title}
                       </h4>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
@@ -145,6 +159,16 @@ export function NotificationsView() {
                         View Details
                       </Button>
                     )}
+                  </div>
+                  <div className="shrink-0 flex items-start">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => deleteNotification(notification.id, e)}
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </div>

@@ -7,19 +7,10 @@ import { PhoneForm } from "@/components/auth/phone-form";
 import { SocialButtons } from "@/components/auth/social-buttons";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/lib/supabase";
-import { getRedirectPath } from "@/lib/roles";
 import { useNavigate } from "@tanstack/react-router";
+import { getRedirectPath } from "@/lib/roles";
 
-type LoginSearch = {
-  mode?: "signup" | "signin";
-};
-
-export const Route = createFileRoute("/login")({
-  validateSearch: (search: Record<string, unknown>): LoginSearch => {
-    return {
-      mode: (search.mode as "signup" | "signin") || undefined,
-    };
-  },
+export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Sign in · CampusRide" },
@@ -28,35 +19,47 @@ export const Route = createFileRoute("/login")({
       { property: "og:description", content: "Verified student ride-sharing. Ride Smart. Ride Together." },
     ],
   }),
-  component: LoginPage,
+  component: AuthPage,
 });
 
 type Mode = "signin" | "signup";
 
-function LoginPage() {
-  const search = Route.useSearch();
-  const [mode, setMode] = useState<Mode>(
-    search.mode === "signup" ? "signup" : "signin"
-  );
+function AuthPage() {
+  const [mode, setMode] = useState<Mode>("signin");
   const [method, setMethod] = useState<"email" | "phone">("email");
   const navigate = useNavigate();
 
   useEffect(() => {
     async function checkSession() {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) return; // stay on login
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      const userId = data.session.user.id;
+      if (!session) return;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) return;
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("role, full_name, phone, college")
-        .eq("id", userId)
-        .maybeSingle();
+        .eq("id", user.id)
+        .single();
 
-      const profileComplete = !!(profile?.full_name && profile?.phone);
-      const redirectPath = getRedirectPath(profile?.role, profileComplete);
-      navigate({ to: redirectPath });
+      const profileComplete = !!(
+        profile?.full_name &&
+        profile?.phone &&
+        profile?.college
+      );
+
+      const redirect = getRedirectPath(profile?.role, profileComplete);
+
+      navigate({ to: redirect });
     }
+
     checkSession();
   }, [navigate]);
 
@@ -101,18 +104,7 @@ function LoginPage() {
       </div>
 
       {mode === "signin" ? (
-        <Tabs value={method} onValueChange={(v) => setMethod(v as "email" | "phone")}>
-          <TabsList className="grid w-full grid-cols-2 bg-white/[0.04] border border-white/10">
-            <TabsTrigger value="email">Email</TabsTrigger>
-            <TabsTrigger value="phone">Phone</TabsTrigger>
-          </TabsList>
-          <TabsContent value="email" className="mt-5">
-            <LoginForm />
-          </TabsContent>
-          <TabsContent value="phone" className="mt-5">
-            <PhoneForm />
-          </TabsContent>
-        </Tabs>
+        <LoginForm />
       ) : (
         <SignupForm onSuccess={() => { /* handled inline */ }} />
       )}

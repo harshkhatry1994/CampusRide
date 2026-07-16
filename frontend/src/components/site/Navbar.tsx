@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
 import { BackButton } from "./BackButton";
 import { useAuth } from "@/context/AuthContext";
+import { TelegramButton } from "../dashboard/TelegramButton";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,24 +70,27 @@ export function Navbar() {
                   </span>
                 </div>
               ) : (
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="sm"
-                  className={`hidden sm:flex relative overflow-hidden group border transition-all duration-300 mr-2 ${
-                    user?.is_premium
-                      ? "border-amber-400/80 bg-amber-500/20 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
-                      : "border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_15px_rgba(245,158,11,0.4)]"
-                  }`}
-                >
-                  <Link to="/premium" className="flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 animate-pulse text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
-                    <span className="relative z-10 font-bold tracking-widest uppercase text-[10px] drop-shadow-md">
-                      Premium
-                    </span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-200/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
-                  </Link>
-                </Button>
+                <>
+                  <TelegramButton />
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className={`hidden sm:flex relative overflow-hidden group border transition-all duration-300 mr-2 ${
+                      user?.is_premium
+                        ? "border-amber-400/80 bg-amber-500/20 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                    }`}
+                  >
+                    <Link to="/premium" className="flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 animate-pulse text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                      <span className="relative z-10 font-bold tracking-widest uppercase text-[10px] drop-shadow-md">
+                        Premium
+                      </span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-200/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
+                    </Link>
+                  </Button>
+                </>
               )}
 
               <DropdownMenu>

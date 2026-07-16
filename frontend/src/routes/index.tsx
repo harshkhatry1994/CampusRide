@@ -76,7 +76,7 @@ function Home() {
                     {isAdmin ? "Admin Dashboard" : "Dashboard"} <ArrowRight className="ml-1 h-4 w-4" />
                   </Link>
                 ) : (
-                  <Link to="/signup">Create account</Link>
+                  <Link to="/login" search={{ mode: "signup" }}>Create account</Link>
                 )}
               </Button>
             </div>
@@ -181,7 +181,7 @@ function Home() {
             </Button>
           ) : (
             <Button asChild size="lg" variant="secondary" className="mt-6">
-              <Link to="/signup">Get started — it's free</Link>
+              <Link to="/login" search={{ mode: "signup" }}>Get started — it's free</Link>
             </Button>
           )}
         </div>

@@ -72,6 +72,11 @@ function PaymentPage() {
   const [faceVerified, setFaceVerified] = useState(false);
   const [faceScore, setFaceScore] = useState<number | null>(null);
 
+  // AI Payment verification
+  const [aiVerifying, setAiVerifying] = useState(false);
+  const [aiVerified, setAiVerified] = useState(false);
+  const [aiResult, setAiResult] = useState<any>(null);
+
   // Verification document
   const [verificationDoc, setVerificationDoc] = useState<any>(null);
 
@@ -255,6 +260,35 @@ function PaymentPage() {
     }
   };
 
+  const verifyPaymentImage = async (file: File) => {
+    setAiVerifying(true);
+    try {
+      const formData = new FormData();
+      formData.append("screenshot", file);
+      formData.append("transactionId", transactionId);
+      formData.append("expectedAmount", finalPayable.toString());
+      formData.append("expectedUpi", "campusride.pay@okaxis");
+      formData.append("bookingId", bookingId);
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/verify-payment`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      setAiResult(data);
+      setAiVerified(true);
+      if (data.success && data.verified) {
+        toast.success(`Payment screenshot verified! Confidence: ${Math.round(data.confidence)}%`);
+      }
+    } catch (e) {
+      console.error(e);
+      setAiVerified(true);
+      setAiResult({ verified: false, confidence: 0 });
+    } finally {
+      setAiVerifying(false);
+    }
+  };
+
   async function handlePayment() {
     if (!transactionId || transactionId.length < 8) {
       toast.error("Please enter a valid Transaction ID (min 8 chars)"); return;
@@ -299,7 +333,7 @@ function PaymentPage() {
       const finalPayable = Math.max(baseTotal - pointsDeduction - rewardDeduction, 0);
       const earnedPoints = Math.round(finalPayable * (LOYALTY_PERCENT / 100));
 
-      const newLoyaltyPoints = Math.max((currentProfile.loyalty_points || 0) - actualPointsToDeduct + earnedPoints, 0);
+      const newLoyaltyPoints = Math.max((currentProfile.loyalty_points || 0) - actualPointsToDeduct, 0);
       const newRewardAvailable = Math.max((currentProfile.reward_available || 0) - (useReward ? 1 : 0), 0);
       const newRewardUsed = (currentProfile.reward_used || 0) + (useReward ? 1 : 0);
 
@@ -352,6 +386,7 @@ function PaymentPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            type: 'payment_submitted',
             userId: user!.id,
             customerEmail: currentProfile.email,
             customerName: currentProfile.full_name || currentProfile.email,
@@ -655,9 +690,17 @@ function PaymentPage() {
                   <Zap className="h-20 w-20 text-primary fill-primary" />
                 </div>
               </div>
-              <div className="mt-6 p-4 rounded-2xl bg-muted/50 border border-border/40">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">UPI ID</p>
-                <p className="font-mono text-sm font-bold">campusride.pay@okaxis</p>
+              
+              <div className="mt-6 flex justify-center">
+                <img src="/assets/upi-logo.svg" className="h-6" alt="UPI" onError={(e) => { e.currentTarget.src = 'https://upload.wikimedia.org/wikipedia/commons/e/e1/UPI-Logo.png' }} />
+              </div>
+              
+              <div className="mt-4 p-4 rounded-2xl bg-muted/50 border border-border/40 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1 text-left">UPI ID</p>
+                  <p className="font-mono text-sm font-bold">campusride.pay@okaxis</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText("campusride.pay@okaxis"); toast.success("UPI ID copied!"); }} className="rounded-xl h-8 text-[10px] uppercase font-bold">Copy</Button>
               </div>
             </div>
 
@@ -731,7 +774,10 @@ function PaymentPage() {
                     setPaymentScreenshot(file);
                     if (file) {
                       const reader = new FileReader();
-                      reader.onloadend = () => setPaymentScreenshotPreview(reader.result as string);
+                      reader.onloadend = () => {
+                        setPaymentScreenshotPreview(reader.result as string);
+                        verifyPaymentImage(file);
+                      };
                       reader.readAsDataURL(file);
                     } else {
                       setPaymentScreenshotPreview(null);
@@ -742,6 +788,21 @@ function PaymentPage() {
                   {paymentScreenshotPreview ? (
                     <div className="relative aspect-[16/9] rounded-2xl overflow-hidden border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)] group">
                       <img src={paymentScreenshotPreview} alt="Payment Screenshot" className="w-full h-full object-cover" />
+                      
+                      {aiVerifying && (
+                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center backdrop-blur-sm z-20">
+                          <Loader2 className="h-8 w-8 text-white animate-spin mb-2" />
+                          <p className="text-white font-bold text-sm">AI Verification...</p>
+                        </div>
+                      )}
+                      
+                      {aiVerified && aiResult && (
+                        <div className={`absolute top-3 left-3 px-3 py-1.5 rounded-xl ${aiResult.verified ? 'bg-emerald-500/90' : 'bg-amber-500/90'} backdrop-blur text-white text-[10px] font-bold flex items-center gap-2 shadow-lg z-30`}>
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          {aiResult.verified ? 'AI Verified' : 'AI Review Needed'} • {Math.round(aiResult.confidence || 0)}%
+                        </div>
+                      )}
+
                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <span className="text-white text-xs font-bold">Replace Screenshot</span>
                       </div>
@@ -786,8 +847,8 @@ function PaymentPage() {
               </Button>
             </div>
 
-            <div className="flex justify-center gap-4 opacity-40">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/UPI-Logo.png" className="h-4 grayscale" alt="UPI" />
+            <div className="flex justify-center gap-4">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/e/e1/UPI-Logo.png" className="h-6" alt="UPI" />
             </div>
           </div>
 
