@@ -9,6 +9,7 @@ import { AdminUsers } from "@/components/admin/AdminUsers";
 import { AdminMemberships } from "@/components/admin/AdminMemberships";
 import { AdminSettings } from "@/components/admin/AdminSettings";
 import { AdminMessages } from "@/components/admin/AdminMessages";
+import { AdminReviews } from "@/components/admin/AdminReviews";
 import { toast } from "sonner";
 import { AdminLayout, AdminSection } from "@/layouts/AdminLayout";
 
@@ -57,6 +58,7 @@ function AdminPage() {
         {section === "users" && <AdminUsers />}
         {section === "messages" && <AdminMessages token={token} />}
         {section === "memberships" && <AdminMemberships />}
+        {section === "reviews" && <AdminReviews token={token} />}
         {section === "settings" && <AdminSettings />}
       </main>
     </AdminLayout>

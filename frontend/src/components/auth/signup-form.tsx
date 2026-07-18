@@ -115,7 +115,7 @@ export function SignupForm({ onSuccess }: { onSuccess: (email: string) => void }
             <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-success" />
           )}
         </div>
-        {email && !isCollegeEmail && <p className="text-xs text-muted-foreground">Tip: use your .edu address to unlock verification perks</p>}
+        {email && !isCollegeEmail && <p className="text-xs text-muted-foreground">Tip: use your university address to unlock verification perks</p>}
         {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
       </div>
 

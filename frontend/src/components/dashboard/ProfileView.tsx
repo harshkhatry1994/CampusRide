@@ -14,7 +14,6 @@ export function ProfileView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
-  const [college, setCollege] = useState(user?.college || "");
   const [department, setDepartment] = useState(user?.department || "");
   const [studentId, setStudentId] = useState(user?.student_id || "");
   const [gender, setGender] = useState(user?.gender || "");
@@ -27,7 +26,6 @@ export function ProfileView() {
       await updateUser({
         name,
         phone,
-        college,
         department,
         student_id: studentId,
         gender,
@@ -110,8 +108,8 @@ export function ProfileView() {
               <Input required type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="h-12 rounded-xl" />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">College</Label>
-              <Input required value={college} onChange={e => setCollege(e.target.value)} className="h-12 rounded-xl" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Department</Label>
+              <Input required value={department} onChange={e => setDepartment(e.target.value)} className="h-12 rounded-xl" />
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Department</Label>

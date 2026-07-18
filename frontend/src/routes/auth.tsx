@@ -45,14 +45,14 @@ function AuthPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, full_name, phone, college")
+        .select("role, full_name, phone, department")
         .eq("id", user.id)
         .single();
 
       const profileComplete = !!(
         profile?.full_name &&
         profile?.phone &&
-        profile?.college
+        profile?.department
       );
 
       const redirect = getRedirectPath(profile?.role, profileComplete);

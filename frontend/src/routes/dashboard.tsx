@@ -24,12 +24,14 @@ import {
   XCircle,
   Sparkles,
   Eye,
+  Star,
   FileText,
   Printer,
   Loader2,
   UserCircle,
   Settings,
   Bell,
+  PenLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +52,9 @@ import { cn } from "@/lib/utils";
 import { ProfileView } from "@/components/dashboard/ProfileView";
 import { SettingsView } from "@/components/dashboard/SettingsView";
 import { NotificationsView } from "@/components/dashboard/NotificationsView";
+import { ReviewModal } from "@/components/reviews/ReviewModal";
+import { ReviewCard } from "@/components/reviews/ReviewCard";
+import { RatingStars } from "@/components/reviews/RatingStars";
 
 export const Route = createFileRoute("/dashboard")({
   validateSearch: (search: Record<string, unknown>): { tab?: string } => {
@@ -97,7 +102,7 @@ function Dashboard() {
     async function loadBookings() {
       const { data, error } = await supabase
         .from("rentals")
-        .select("*, bikes(*)")
+        .select("*, bikes(*), ride_reviews(*)")
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
@@ -191,6 +196,9 @@ function Dashboard() {
           <TabsTrigger value="notifications" className="gap-2 px-6">
             <Bell className="h-4 w-4" /> Notifications
           </TabsTrigger>
+          <TabsTrigger value="reviews" className="gap-2 px-6">
+            <Star className="h-4 w-4" /> My Reviews
+          </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2 px-6">
             <Settings className="h-4 w-4" /> Settings
           </TabsTrigger>
@@ -229,7 +237,9 @@ function Dashboard() {
                     ) : (
                       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
                         {filteredBookings.map((b) => (
-                          <RideCard key={b.id} booking={b} />
+                          <RideCard key={b.id} booking={b} onBookingUpdate={(updated: any) => {
+                            setBookings(prev => prev.map(bk => bk.id === updated.id ? updated : bk));
+                          }} />
                         ))}
                       </div>
                     )}
@@ -256,6 +266,10 @@ function Dashboard() {
           <NotificationsView />
         </TabsContent>
 
+        <TabsContent value="reviews" className="mt-0 focus-visible:outline-none">
+          <MyReviewsTab />
+        </TabsContent>
+
         <TabsContent value="settings" className="mt-0 focus-visible:outline-none">
           <SettingsView />
         </TabsContent>
@@ -264,10 +278,109 @@ function Dashboard() {
   );
 }
 
-function RideCard({ booking }: { booking: any }) {
+function MyReviewsTab() {
+  const { token } = useAuth();
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      if (!token) return;
+      const { reviewService } = await import("@/services/reviewService");
+      const res = await reviewService.getMyReviews(token);
+      if (res.success) setReviews(res.data || []);
+      setLoading(false);
+    }
+    load();
+  }, [token]);
+
+  const handleEditSuccess = (updated: any) => {
+    setReviews((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+  };
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" /> Loading your reviews...
+      </div>
+    );
+
+  if (reviews.length === 0)
+    return (
+      <div className="text-center py-20 bg-card border border-dashed border-border/60 rounded-[2rem]">
+        <div className="flex justify-center gap-0.5 mb-4">
+          {[1,2,3,4,5].map(s => <Star key={s} className="h-7 w-7 text-muted-foreground/20" />)}
+        </div>
+        <h3 className="text-lg font-bold mb-2">No reviews yet</h3>
+        <p className="text-muted-foreground text-sm">
+          Complete a ride and rate it to see your reviews here.
+        </p>
+      </div>
+    );
+
+  return (
+    <div className="space-y-5">
+      <h2 className="text-xl font-black">My Reviews</h2>
+      <div className="grid gap-5 md:grid-cols-2">
+        {reviews.map((r) => (
+          <div key={r.id} className="space-y-3">
+            {/* Bike header */}
+            {r.bikes && (
+              <div className="flex items-center gap-3 px-1">
+                <div className="h-10 w-12 rounded-xl bg-muted/40 border border-border/40 overflow-hidden shrink-0">
+                  {r.bikes.image_url ? (
+                    <img src={r.bikes.image_url} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <BikeIcon className="h-4 w-4 text-muted-foreground/40" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-sm truncate">{r.bikes.bike_name || r.bikes.brand}</p>
+                  <p className="text-xs text-muted-foreground">{r.bikes.brand} {r.bikes.model}</p>
+                </div>
+              </div>
+            )}
+            <ReviewCard review={r} />
+            <div className="flex justify-end">
+              <button
+                onClick={() => { setEditTarget(r); setEditOpen(true); }}
+                className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+              >
+                <PenLine className="h-3 w-3" /> Edit Review
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {editTarget && (
+        <ReviewModal
+          isOpen={editOpen}
+          onClose={() => setEditOpen(false)}
+          rentalId={editTarget.rental_id}
+          existingReview={editTarget}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+    </div>
+  );
+}
+
+function RideCard({ booking, onBookingUpdate }: { booking: any; onBookingUpdate: (updated: any) => void }) {
   const [showDetails, setShowDetails] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [localReview, setLocalReview] = useState<any | null>(
+    Array.isArray(booking.ride_reviews) ? booking.ride_reviews[0] : (booking.ride_reviews || null)
+  );
+
   const bike = booking.bikes || booking.bike;
-  const statusLower = booking.status?.toLowerCase();
+  const statusLower = (booking.status || '').toLowerCase().trim();
+  const hasReview = !!localReview;
+
   const statusColors: any = {
     draft: "bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]",
     pending: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.1)]",
@@ -275,6 +388,15 @@ function RideCard({ booking }: { booking: any }) {
     rejected: "bg-rose-500/10 text-rose-500 border-rose-500/20 shadow-[0_0_10px_rgba(244,63,94,0.1)]",
     completed: "bg-blue-500/10 text-blue-500 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.1)]",
     cancelled: "bg-muted/50 text-muted-foreground border-border/40",
+  };
+
+  const handleReviewSuccess = (reviewData: any) => {
+    // Optimistic update — no page refresh needed
+    setLocalReview(reviewData);
+    onBookingUpdate({
+      ...booking,
+      ride_reviews: [reviewData],
+    });
   };
 
   return (
@@ -312,6 +434,14 @@ function RideCard({ booking }: { booking: any }) {
             <p className="text-xs text-muted-foreground truncate">
               {bike?.brand} {bike?.model}
             </p>
+            {/* Show star rating inline if already reviewed */}
+            {hasReview && (
+              <div className="flex items-center gap-0.5 mt-1">
+                {[1,2,3,4,5].map(s => (
+                  <Star key={s} className={cn("h-3 w-3", s <= localReview.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30")} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -328,7 +458,7 @@ function RideCard({ booking }: { booking: any }) {
         </div>
 
         <div className="pt-4 border-t border-border/40 flex items-center justify-between">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {['draft', 'payment_pending', 'incomplete'].includes(statusLower) ? (
               <Link to="/booking/$bikeId" params={{ bikeId: bike?.id || 'unknown' }} search={{ bookingId: booking.id }}>
                 <Button
@@ -354,6 +484,35 @@ function RideCard({ booking }: { booking: any }) {
                     <Eye className="h-3.5 w-3.5 mr-1" /> View
                   </Button>
                 </Link>
+
+                {/* Rate Ride / Edit Review button — only for completed status */}
+                {statusLower === 'completed' && (
+                  hasReview ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-amber-500 hover:bg-amber-500/10 rounded-lg gap-1"
+                      onClick={() => setReviewOpen(true)}
+                    >
+                      <div className="flex items-center mr-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star key={s} className={cn("h-3 w-3", s <= localReview.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30")} />
+                        ))}
+                      </div>
+                      Edit Review
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-3 text-[10px] font-black uppercase tracking-widest text-amber-500 hover:bg-amber-500/10 rounded-lg gap-1"
+                      onClick={() => setReviewOpen(true)}
+                    >
+                      <Star className="h-3.5 w-3.5" /> Rate Ride
+                    </Button>
+                  )
+                )}
+
                 <Button
                   size="sm"
                   variant="ghost"
@@ -388,6 +547,15 @@ function RideCard({ booking }: { booking: any }) {
           </div>
         </div>
       </div>
+
+      {/* Review Modal */}
+      <ReviewModal
+        isOpen={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        rentalId={booking.id}
+        existingReview={localReview}
+        onSuccess={handleReviewSuccess}
+      />
 
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:rounded-[2.5rem] p-0 border-none bg-background shadow-2xl">
@@ -549,6 +717,51 @@ function RideCard({ booking }: { booking: any }) {
                 </div>
               </div>
             </div>
+
+            {/* Step 3: Review section inside detail dialog */}
+            {statusLower === 'completed' && (
+              <div className="p-5 rounded-3xl bg-muted/20 border border-border/40 space-y-3">
+                <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <Star className="h-4 w-4 text-amber-400" /> Your Review
+                </h4>
+                {localReview ? (
+                  <div className="space-y-3">
+                    <RatingStars rating={localReview.rating} size="sm" />
+                    <p className="text-sm text-foreground leading-relaxed">{localReview.review}</p>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {localReview.ride_experience && (
+                        <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-500 font-semibold border border-blue-500/20">
+                          🏍️ {localReview.ride_experience}
+                        </span>
+                      )}
+                      {localReview.bike_condition && (
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 font-semibold border border-emerald-500/20">
+                          {localReview.bike_condition}
+                        </span>
+                      )}
+                      {localReview.would_recommend !== undefined && (
+                        <span className={`px-2.5 py-1 rounded-full font-semibold border text-xs ${localReview.would_recommend ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
+                          {localReview.would_recommend ? '👍 Recommends' : '👎 Not Recommended'}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setReviewOpen(true)}
+                      className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                    >
+                      <PenLine className="h-3 w-3" /> Edit Review
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setReviewOpen(true)}
+                    className="flex items-center gap-2 text-sm font-bold text-amber-500 hover:text-amber-400 transition-colors"
+                  >
+                    <Star className="h-4 w-4" /> ⭐ Leave a Review
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-4 p-8 pt-0">
               <Link to="/receipt/$bookingId" params={{ bookingId: booking.id }} className="flex-1">

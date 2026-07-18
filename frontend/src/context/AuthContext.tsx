@@ -23,7 +23,6 @@ interface User {
   avatar?: string;
   avatar_url?: string;
   phone?: string;
-  college?: string;
   department?: string;
   student_id?: string;
   gender?: string;
@@ -135,7 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: role,
         avatar_url: profile?.avatar_url || authUser.user_metadata?.avatar_url || undefined,
         phone: profile?.phone || undefined,
-        college: profile?.college || undefined,
         department: profile?.department || undefined,
         student_id: profile?.student_id || undefined,
         gender: profile?.gender || undefined,
@@ -203,7 +201,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (updates.role !== undefined) dbUpdates.role = updates.role;
     if (updates.avatar_url !== undefined) dbUpdates.avatar_url = updates.avatar_url;
     if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
-    if (updates.college !== undefined) dbUpdates.college = updates.college;
     if (updates.department !== undefined) dbUpdates.department = updates.department;
     if (updates.student_id !== undefined) dbUpdates.student_id = updates.student_id;
     if (updates.gender !== undefined) dbUpdates.gender = updates.gender;

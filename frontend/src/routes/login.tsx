@@ -49,7 +49,7 @@ function LoginPage() {
       const userId = data.session.user.id;
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, full_name, phone, college")
+        .select("role, full_name, phone, department")
         .eq("id", userId)
         .maybeSingle();
 

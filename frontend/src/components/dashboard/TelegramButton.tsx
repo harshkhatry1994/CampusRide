@@ -28,7 +28,7 @@ export function TelegramButton() {
           .select('telegram_chat_id, telegram_username')
           .eq('id', user.id)
           .single();
-          
+
         if (data) {
           setIsConnected(!!data.telegram_chat_id);
           setUsername(data.telegram_username || "");
@@ -122,7 +122,7 @@ export function TelegramButton() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-border/40 my-2" />
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={handleDisconnect}
             disabled={disconnecting}
             className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer rounded-xl transition-colors"

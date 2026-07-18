@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { ReviewSection } from "@/components/reviews/ReviewSection";
 
 export const Route = createFileRoute("/bikes/$bikeId")({
   head: () => ({ meta: [{ title: "Motorcycle Details — CampusRide" }] }),
@@ -243,6 +244,9 @@ function BikeDetails() {
           </div>
         </div>
       </div>
+
+      {/* Reviews Section */}
+      <ReviewSection bikeId={bike.id} />
     </div>
   );
 }

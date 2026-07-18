@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { Bell, Check, Loader2, AlertCircle, Trash2, MessageSquare, ShieldCheck, CreditCard, Bike } from "lucide-react";
+import { Bell, Check, Loader2, AlertCircle, Trash2, MessageSquare, ShieldCheck, CreditCard, Bike, Star } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 
@@ -119,7 +119,9 @@ export function NotificationsView() {
                   <div className={`mt-1 h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${
                     notification.read ? 'bg-muted text-muted-foreground' : 'bg-primary/20 text-primary'
                   }`}>
-                    {notification.type.includes('approved') || notification.type.includes('success') ? (
+                    {notification.type.includes('review_reminder') ? (
+                      <Star className="h-5 w-5" />
+                    ) : notification.type.includes('approved') || notification.type.includes('success') ? (
                       <Check className="h-5 w-5" />
                     ) : notification.type.includes('cancelled') || notification.type.includes('rejected') ? (
                       <AlertCircle className="h-5 w-5" />

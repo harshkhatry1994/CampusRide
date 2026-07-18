@@ -19,8 +19,9 @@ import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
+import { Star } from "lucide-react";
 
-export type AdminSection = "dashboard" | "inventory" | "bike_management" | "rentals" | "users" | "messages" | "memberships" | "settings";
+export type AdminSection = "dashboard" | "inventory" | "bike_management" | "rentals" | "users" | "messages" | "memberships" | "reviews" | "settings";
 
 const NAV_ITEMS: { id: AdminSection; label: string; icon: React.ReactNode; badge?: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -30,6 +31,7 @@ const NAV_ITEMS: { id: AdminSection; label: string; icon: React.ReactNode; badge
   { id: "users", label: "Users", icon: <Users className="h-4 w-4" /> },
   { id: "messages", label: "Messages", icon: <Mail className="h-4 w-4" /> },
   { id: "memberships", label: "Memberships", icon: <Crown className="h-4 w-4" /> },
+  { id: "reviews", label: "Review Management", icon: <Star className="h-4 w-4" /> },
   { id: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
 ];
 

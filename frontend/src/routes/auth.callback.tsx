@@ -70,7 +70,7 @@ function AuthCallbackPage() {
         }
 
         const computedIsAdmin = isAdminRole(profile?.role);
-        const profileComplete = !!(profile?.full_name && profile?.phone && profile?.college);
+        const profileComplete = !!(profile?.full_name && profile?.phone && profile?.department);
         const redirectDest = getRedirectPath(profile?.role, profileComplete);
 
         console.log("[AuthCallback] Email:", authUser.email);
